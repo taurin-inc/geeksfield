@@ -1,0 +1,48 @@
+# macOS
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+*.xcscmblueprint
+*.xccheckout
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.pins
+Package.resolved
+
+# CocoaPods / Carthage (not used but ignore just in case)
+Pods/
+Carthage/Build
+
+# XcodeGen output (regenerated from project.yml)
+Geeksfield.xcodeproj/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# IDEs
+.vscode/
+.idea/
+
+# Secrets — these should never land here but be defensive
+*.p12
+*.mobileprovision
+ExportOptions.plist
