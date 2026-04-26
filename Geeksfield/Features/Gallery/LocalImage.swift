@@ -6,11 +6,18 @@ import SwiftUI
 /// concurrency. So we read the bytes off-main as Sendable Data, then construct
 /// NSImage on the main actor.
 struct LocalImage: View {
+    enum LoadError: Equatable {
+        case fileNotFound(String)
+        case decodingFailed
+        case readFailed(String)
+    }
+
     let url: URL
     var contentMode: ContentMode = .fit
 
+    @Environment(AppState.self) private var appState
     @State private var image: NSImage?
-    @State private var errorMessage: String?
+    @State private var loadError: LoadError?
 
     var body: some View {
         Group {
@@ -18,12 +25,12 @@ struct LocalImage: View {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
-            } else if let errorMessage {
+            } else if let loadError {
                 VStack(spacing: 8) {
                     Image(systemName: "photo")
                         .font(.title)
                         .foregroundStyle(.tertiary)
-                    Text(errorMessage)
+                    Text(message(for: loadError))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -36,6 +43,14 @@ struct LocalImage: View {
         .task(id: url.path) { await load() }
     }
 
+    private func message(for err: LoadError) -> String {
+        switch err {
+        case .fileNotFound(let name): return appState.l10n.fileNotFound(name)
+        case .decodingFailed: return appState.l10n.imageDecodeFailed
+        case .readFailed(let msg): return appState.l10n.readFailed(msg)
+        }
+    }
+
     private func load() async {
         let url = self.url
         let path = url.path
@@ -43,7 +58,7 @@ struct LocalImage: View {
         // Verify the file exists before doing anything else — surfacing this
         // up front beats spinning forever on a missing file.
         guard FileManager.default.fileExists(atPath: path) else {
-            errorMessage = "파일을 찾을 수 없습니다: \(url.lastPathComponent)"
+            loadError = .fileNotFound(url.lastPathComponent)
             return
         }
 
@@ -55,10 +70,10 @@ struct LocalImage: View {
             if let nsImage = NSImage(data: data) {
                 self.image = nsImage
             } else {
-                self.errorMessage = "이미지 디코딩 실패"
+                self.loadError = .decodingFailed
             }
         } catch {
-            self.errorMessage = "읽기 실패: \(error.localizedDescription)"
+            self.loadError = .readFailed(error.localizedDescription)
         }
     }
 }

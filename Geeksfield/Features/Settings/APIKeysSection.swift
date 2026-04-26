@@ -44,7 +44,7 @@ struct ProviderKeyRow: View {
                 .font(.headline)
             Spacer()
             Link(destination: provider.apiKeyURL) {
-                Label("키 발급", systemImage: "arrow.up.forward.square")
+                Label(appState.l10n.getKey, systemImage: "arrow.up.forward.square")
                     .labelStyle(.titleAndIcon)
                     .font(.callout)
             }
@@ -53,8 +53,9 @@ struct ProviderKeyRow: View {
     }
 
     private var inputRow: some View {
-        HStack(alignment: .center, spacing: 8) {
-            SecureField(savedKeyExists ? "새 키로 교체하려면 입력" : "API Key", text: $field.draft)
+        let l10n = appState.l10n
+        return HStack(alignment: .center, spacing: 8) {
+            SecureField(savedKeyExists ? l10n.enterToReplace : "API Key", text: $field.draft)
                 .textFieldStyle(.roundedBorder)
 
             Button {
@@ -63,7 +64,7 @@ struct ProviderKeyRow: View {
                 if field.validation == .validating {
                     ProgressView().controlSize(.small)
                 } else {
-                    Text(savedKeyExists ? "교체 & 검증" : "저장 & 검증")
+                    Text(savedKeyExists ? l10n.replaceAndVerify : l10n.saveAndVerify)
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -80,7 +81,7 @@ struct ProviderKeyRow: View {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.bordered)
-                .help("저장된 키 삭제")
+                .help(l10n.deleteSavedKey)
             }
         }
     }
@@ -103,23 +104,24 @@ struct ProviderKeyRow: View {
 
     @ViewBuilder
     private var statusLine: some View {
+        let l10n = appState.l10n
         HStack(spacing: 6) {
             switch field.validation {
             case .idle:
                 if let hint = savedKeyHint {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                    Text("저장됨").foregroundStyle(.secondary)
+                    Text(l10n.saved).foregroundStyle(.secondary)
                     Text(hint).monospaced().foregroundStyle(.tertiary)
                 } else {
                     Image(systemName: "circle.dashed").foregroundStyle(.tertiary)
-                    Text("키를 입력하고 저장하세요.").foregroundStyle(.secondary)
+                    Text(l10n.enterAndSaveKey).foregroundStyle(.secondary)
                 }
             case .validating:
                 ProgressView().controlSize(.small)
-                Text("검증 중…").foregroundStyle(.secondary)
+                Text(l10n.verifying).foregroundStyle(.secondary)
             case .valid(let modelCount):
                 Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-                Text("유효한 키 · 모델 \(modelCount)개").foregroundStyle(.secondary)
+                Text(l10n.validKeyModelCount(modelCount)).foregroundStyle(.secondary)
                 if let hint = savedKeyHint {
                     Text(hint).monospaced().foregroundStyle(.tertiary)
                 }
@@ -143,7 +145,7 @@ struct ProviderKeyRow: View {
             field.validation = .valid(modelCount: ids.count)
             field.draft = ""
         } catch {
-            let msg = (error as? LocalizedError)?.errorDescription ?? "검증 실패"
+            let msg = (error as? LocalizedError)?.errorDescription ?? appState.l10n.verificationFailed
             field.validation = .invalid(msg)
         }
     }

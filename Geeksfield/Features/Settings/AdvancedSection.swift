@@ -5,19 +5,20 @@ struct AdvancedSection: View {
 
     var body: some View {
         @Bindable var registry = appState.modelRegistry
+        let l10n = appState.l10n
         VStack(alignment: .leading, spacing: 16) {
-            Text("Model discovery")
+            Text(l10n.modelDiscovery)
                 .font(.headline)
 
             VStack(spacing: 0) {
-                Toggle("알 수 없는 모델도 표시", isOn: $registry.showUnknownModels)
+                Toggle(l10n.showUnknownModels, isOn: $registry.showUnknownModels)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
 
                 if let when = registry.lastRefreshedAt {
                     Divider()
                     HStack {
-                        Text("마지막 새로고침")
+                        Text(l10n.lastRefreshed)
                         Spacer()
                         Text(when.formatted(date: .abbreviated, time: .shortened))
                             .foregroundStyle(.secondary)

@@ -19,7 +19,7 @@ struct GeeksfieldApp: App {
         .defaultSize(width: 1440, height: 900)
         .commands {
             CommandGroup(after: .appInfo) {
-                Button("업데이트 확인…") {
+                Button(appState.l10n.checkForUpdates) {
                     appState.autoUpdater.checkForUpdates()
                 }
                 .disabled(!appState.autoUpdater.isEnabled)
@@ -59,10 +59,10 @@ private struct RootView: View {
         }
         .animation(.smooth(duration: 0.22), value: appState.presentedAsset?.id)
         .alert(
-            appState.errorBus.latest?.title ?? "오류",
+            appState.errorBus.latest?.title ?? appState.l10n.error,
             isPresented: errorBinding
         ) {
-            Button("확인") { appState.errorBus.dismiss() }
+            Button(appState.l10n.ok) { appState.errorBus.dismiss() }
         } message: {
             Text(appState.errorBus.latest?.message ?? "")
         }
@@ -87,5 +87,6 @@ private struct MainSplitView: View {
         } detail: {
             ChatSidebarView()
         }
+        .toolbar(appState.presentedAsset == nil ? .visible : .hidden, for: .windowToolbar)
     }
 }

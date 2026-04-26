@@ -5,23 +5,51 @@ import UniformTypeIdentifiers
 struct ReferencePicker: View {
     @Environment(AppState.self) private var appState
     @State private var popoverOpen = false
+    var compact: Bool = false
 
     var body: some View {
-        Button {
-            popoverOpen.toggle()
-        } label: {
-            Label(
-                "\(appState.pendingReferenceIDs.count)",
-                systemImage: appState.pendingReferenceIDs.isEmpty
-                    ? "photo.on.rectangle"
-                    : "photo.on.rectangle.fill"
-            )
+        Group {
+            if compact {
+                Button {
+                    popoverOpen.toggle()
+                } label: {
+                    compactLabel
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    popoverOpen.toggle()
+                } label: {
+                    Label(
+                        "\(appState.pendingReferenceIDs.count)",
+                        systemImage: appState.pendingReferenceIDs.isEmpty
+                            ? "photo.on.rectangle"
+                            : "photo.on.rectangle.fill"
+                    )
+                }
+                .buttonStyle(.glass)
+            }
         }
-        .buttonStyle(.glass)
         .popover(isPresented: $popoverOpen, arrowEdge: .top) {
             content
                 .frame(width: 360, height: 420)
         }
+    }
+
+    private var compactLabel: some View {
+        Image(systemName: "photo.badge.plus")
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(.secondary)
+            .frame(width: 56, height: 56)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+            }
+            .contentShape(Rectangle())
     }
 
     private var content: some View {
@@ -39,10 +67,11 @@ struct ReferencePicker: View {
     }
 
     private var header: some View {
-        HStack {
-            Text("레퍼런스").font(.headline)
+        let l10n = appState.l10n
+        return HStack {
+            Text(l10n.reference).font(.headline)
             Spacer()
-            Button("외부 추가…") { pickExternalFile() }
+            Button(l10n.addExternal) { pickExternalFile() }
                 .buttonStyle(.glass)
             if !appState.pendingReferenceIDs.isEmpty {
                 Button(role: .destructive) { appState.clearReferences() } label: {
@@ -55,7 +84,7 @@ struct ReferencePicker: View {
 
     private var attachedSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("첨부됨 (\(appState.pendingReferenceIDs.count))")
+            Text(appState.l10n.attachedCount(appState.pendingReferenceIDs.count))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -87,13 +116,13 @@ struct ReferencePicker: View {
 
     private var projectPickerSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("프로젝트 내 이미지에서 선택")
+            Text(appState.l10n.pickFromProjectImages)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             let assets = projectAssets
             if assets.isEmpty {
-                Text("아직 이미지가 없습니다.").font(.callout).foregroundStyle(.tertiary)
+                Text(appState.l10n.noImagesYetSentence).font(.callout).foregroundStyle(.tertiary)
             } else {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], spacing: 8) {

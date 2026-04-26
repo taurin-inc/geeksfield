@@ -32,7 +32,7 @@ struct OnboardingView: View {
             VStack(spacing: 6) {
                 Text("Geeksfield")
                     .font(.system(size: 34, weight: .semibold, design: .rounded))
-                Text("Gemini 또는 OpenAI를 연결하면 시작합니다")
+                Text(appState.l10n.onboardingSubtitle)
                     .font(.body)
                     .foregroundStyle(.secondary)
             }
@@ -42,7 +42,7 @@ struct OnboardingView: View {
 
     private var footer: some View {
         HStack {
-            Button("나중에") { appState.markOnboardingComplete() }
+            Button(appState.l10n.skipForNow) { appState.markOnboardingComplete() }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -52,7 +52,7 @@ struct OnboardingView: View {
                     appState.markOnboardingComplete()
                 }
             } label: {
-                Text("계속")
+                Text(appState.l10n.getStarted)
                     .padding(.horizontal, 8)
             }
             .buttonStyle(.glassProminent)

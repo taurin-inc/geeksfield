@@ -7,9 +7,10 @@ enum ExportError: Error, LocalizedError {
     case sourceMissing(URL)
 
     var errorDescription: String? {
+        let l10n = MainActor.assumeIsolated { L10n.current }
         switch self {
-        case .userCancelled: return "사용자가 취소했습니다."
-        case .sourceMissing(let u): return "원본 파일이 없습니다: \(u.path)"
+        case .userCancelled: return l10n.exportUserCancelled
+        case .sourceMissing(let u): return l10n.exportSourceMissing(u.path)
         }
     }
 }
@@ -49,7 +50,7 @@ enum ExportService {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "여기에 저장"
+        panel.prompt = L10n.current.exportSaveHere
 
         guard panel.runModal() == .OK, let destination = panel.url else {
             throw ExportError.userCancelled
@@ -76,7 +77,7 @@ enum ExportService {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "여기에 저장"
+        panel.prompt = L10n.current.exportSaveHere
 
         guard panel.runModal() == .OK, let root = panel.url else {
             throw ExportError.userCancelled

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ImageTileView: View {
     let asset: ImageAsset
+    @Environment(AppState.self) private var appState
     @State private var hovered = false
 
     var body: some View {
@@ -13,6 +14,7 @@ struct ImageTileView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             statusOverlay
+            hoverOverlay
         }
         .aspectRatio(1, contentMode: .fit)
         .overlay {
@@ -29,6 +31,38 @@ struct ImageTileView: View {
         .animation(.easeOut(duration: 0.15), value: hovered)
         .onHover { hovered = $0 }
         .draggable(transferableURL)
+    }
+
+    @ViewBuilder
+    private var hoverOverlay: some View {
+        if asset.hasFile && (hovered || asset.status == .picked) {
+            VStack {
+                HStack {
+                    Spacer()
+                    bookmarkHoverButton
+                }
+                Spacer()
+            }
+            .padding(8)
+            .transition(.opacity)
+        }
+    }
+
+    private var bookmarkHoverButton: some View {
+        Button {
+            appState.setStatus(asset, to: asset.status == .picked ? .draft : .picked)
+        } label: {
+            Image(systemName: asset.status == .picked ? "bookmark.fill" : "bookmark")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(asset.status == .picked ? Color.yellow : Color.white)
+                .frame(width: 28, height: 28)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay {
+                    Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .help(asset.status == .picked ? appState.l10n.pickedClear : appState.l10n.pickedToggle)
     }
 
     @ViewBuilder
@@ -58,7 +92,7 @@ struct ImageTileView: View {
         if asset.status == .pending {
             VStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("생성 중…")
+                Text(appState.l10n.generating)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -68,7 +102,7 @@ struct ImageTileView: View {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text("실패")
+                    Text(appState.l10n.failed)
                         .font(.caption2)
                         .foregroundStyle(.primary)
                     Spacer()
@@ -79,19 +113,6 @@ struct ImageTileView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         } else if !asset.hasFile {
             ProgressView().controlSize(.small)
-        } else if asset.status == .picked {
-            VStack {
-                HStack {
-                    Spacer()
-                    Image(systemName: "bookmark.fill")
-                        .font(.caption)
-                        .foregroundStyle(.white)
-                        .padding(6)
-                        .background(Color.accentColor, in: Circle())
-                }
-                Spacer()
-            }
-            .padding(8)
         }
     }
 

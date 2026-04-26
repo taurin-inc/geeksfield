@@ -7,6 +7,7 @@ struct SidebarView: View {
     @State private var newProjectName = ""
 
     var body: some View {
+        let l10n = appState.l10n
         ZStack {
             if appState.projects.isEmpty {
                 emptyState
@@ -14,14 +15,14 @@ struct SidebarView: View {
                 projectList
             }
         }
-        .navigationTitle("Projects")
+        .navigationTitle(l10n.projects)
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 360)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { newProjectSheet = true } label: {
                     Image(systemName: "plus")
                 }
-                .help("새 프로젝트")
+                .help(l10n.newProject)
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -70,7 +71,7 @@ struct SidebarView: View {
                 .fill(isSelected ? Color.white.opacity(0.14) : Color.clear)
         )
         .contextMenu {
-            Button("프로젝트 내보내기") {
+            Button(appState.l10n.exportProject) {
                 appState.selectedProjectID = project.id
                 appState.exportSelectedProject()
             }
@@ -82,9 +83,9 @@ struct SidebarView: View {
             Image(systemName: "folder.badge.plus")
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(.tertiary)
-            Text("프로젝트 없음")
+            Text(appState.l10n.noProjects)
                 .font(.headline)
-            Text("툴바의 + 버튼으로 시작하세요")
+            Text(appState.l10n.startWithPlus)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -100,7 +101,7 @@ struct SidebarView: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.glass)
-            .help("설정")
+            .help(appState.l10n.settings)
 
             Spacer()
 
@@ -126,19 +127,20 @@ struct SidebarView: View {
                 .font(.caption)
                 .foregroundStyle(connected ? .primary : .secondary)
         }
-        .help("\(provider.displayName) \(connected ? "연결됨" : "미연결")")
+        .help("\(provider.displayName) \(connected ? appState.l10n.connected : appState.l10n.notConnected)")
     }
 
     private var newProjectForm: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("새 프로젝트").font(.title2).fontWeight(.semibold)
-            TextField("이름", text: $newProjectName)
+        let l10n = appState.l10n
+        return VStack(alignment: .leading, spacing: 16) {
+            Text(l10n.newProject).font(.title2).fontWeight(.semibold)
+            TextField(l10n.name, text: $newProjectName)
                 .textFieldStyle(.roundedBorder)
             HStack {
                 Spacer()
-                Button("취소") { newProjectSheet = false }
+                Button(l10n.cancel) { newProjectSheet = false }
                     .buttonStyle(.glass)
-                Button("만들기") {
+                Button(l10n.create) {
                     let name = newProjectName.trimmingCharacters(in: .whitespaces)
                     guard !name.isEmpty else { return }
                     appState.createProject(name: name)

@@ -40,6 +40,17 @@ final class AppState {
     var selectedImageModel: ModelDescriptor?
     var selectedChatModel: ModelDescriptor?
     var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "geeksfield.onboarding.completed")
+    var language: Language = {
+        let raw = UserDefaults.standard.string(forKey: "geeksfield.language") ?? Language.korean.rawValue
+        return Language(rawValue: raw) ?? .korean
+    }()
+
+    var l10n: L10n { L10n(lang: language) }
+
+    func setLanguage(_ language: Language) {
+        self.language = language
+        UserDefaults.standard.set(language.rawValue, forKey: "geeksfield.language")
+    }
 
     private let lastImageProviderKey = "geeksfield.lastImage.provider"
     private let lastImageIDKey = "geeksfield.lastImage.id"
@@ -223,7 +234,7 @@ final class AppState {
                     self?.refreshAssets(for: pid)
                 }
             } catch {
-                errorBus.report(error, title: "이미지 생성 실패")
+                errorBus.report(error, title: l10n.imageGenerationFailed)
             }
         }
     }
@@ -242,7 +253,7 @@ final class AppState {
             let refID = try referenceStore.ingestExternal(projectID: pid, sourceURL: url)
             pendingReferenceIDs.append(refID)
         } catch {
-            errorBus.report(error, title: "레퍼런스 추가 실패")
+            errorBus.report(error, title: l10n.referenceAddFailed)
         }
     }
 
@@ -276,7 +287,7 @@ final class AppState {
     ) {
         guard let src = asset.fileURL,
               let originalPNG = try? Data(contentsOf: src) else {
-            errorBus.report(title: "인페인트 실패", message: "원본 이미지를 읽을 수 없습니다.")
+            errorBus.report(title: l10n.inpaintFailed, message: l10n.cannotReadOriginal)
             return
         }
         let pid = asset.metadata.projectID
@@ -298,7 +309,7 @@ final class AppState {
                     self?.refreshAssets(for: pid)
                 }
             } catch {
-                errorBus.report(error, title: "인페인트 실패")
+                errorBus.report(error, title: l10n.inpaintFailed)
             }
         }
     }
@@ -313,7 +324,7 @@ final class AppState {
             } catch ExportError.userCancelled {
                 // ignore
             } catch {
-                errorBus.report(error, title: "내보내기 실패")
+                errorBus.report(error, title: l10n.exportFailed)
             }
         }
     }
@@ -327,7 +338,7 @@ final class AppState {
             } catch ExportError.userCancelled {
                 // ignore
             } catch {
-                errorBus.report(error, title: "내보내기 실패")
+                errorBus.report(error, title: l10n.exportFailed)
             }
         }
     }
@@ -346,7 +357,7 @@ final class AppState {
             } catch ExportError.userCancelled {
                 // ignore
             } catch {
-                errorBus.report(error, title: "프로젝트 내보내기 실패")
+                errorBus.report(error, title: l10n.projectExportFailed)
             }
         }
     }
@@ -357,7 +368,7 @@ final class AppState {
         let meta = asset.metadata
         guard let model = modelRegistry.imageModels.first(where: { $0.id == meta.modelID && $0.provider == meta.provider })
                 ?? modelRegistry.imageModels.first(where: { $0.provider == meta.provider }) else {
-            errorBus.report(title: "다시 만들기 실패", message: "모델을 찾을 수 없습니다.")
+            errorBus.report(title: l10n.regenerateFailed, message: l10n.modelNotFound)
             return
         }
         let request = GenerationRequest(

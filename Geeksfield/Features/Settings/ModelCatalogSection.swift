@@ -4,33 +4,34 @@ struct ModelCatalogSection: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
+        let l10n = appState.l10n
         VStack(alignment: .leading, spacing: 16) {
             header
 
             if appState.modelRegistry.imageModels.isEmpty
                 && appState.modelRegistry.chatModels.isEmpty {
                 ContentUnavailableView(
-                    "아직 모델이 없습니다",
+                    l10n.noModelsYet,
                     systemImage: "questionmark.square.dashed",
-                    description: Text("API 키를 먼저 연결하세요.")
+                    description: Text(l10n.connectKeyFirst)
                 )
                 .frame(maxWidth: .infinity, minHeight: 200)
             } else {
-                modelGroup(title: "Image", models: appState.modelRegistry.imageModels)
-                modelGroup(title: "Chat", models: appState.modelRegistry.chatModels)
+                modelGroup(title: l10n.imageCategory, models: appState.modelRegistry.imageModels)
+                modelGroup(title: l10n.chatCategory, models: appState.modelRegistry.chatModels)
             }
         }
     }
 
     private var header: some View {
         HStack {
-            Text("Discovered models")
+            Text(appState.l10n.discoveredModels)
                 .font(.headline)
             Spacer()
             Button {
                 Task { await appState.modelRegistry.refresh() }
             } label: {
-                Label("새로고침", systemImage: "arrow.clockwise")
+                Label(appState.l10n.refresh, systemImage: "arrow.clockwise")
                     .labelStyle(.titleAndIcon)
             }
             .buttonStyle(.bordered)
@@ -49,7 +50,7 @@ struct ModelCatalogSection: View {
                     modelRow(model)
                 }
                 if models.isEmpty {
-                    Text("없음")
+                    Text(appState.l10n.none)
                         .font(.callout)
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)

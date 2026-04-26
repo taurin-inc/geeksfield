@@ -15,22 +15,24 @@ struct GalleryView: View {
 
             PromptBarView()
         }
+        .ignoresSafeArea(.container, edges: .top)
         .navigationSplitViewColumnWidth(min: 480, ideal: 720)
     }
 
     @ViewBuilder
     private var content: some View {
+        let l10n = appState.l10n
         if appState.selectedProjectID == nil {
             ContentUnavailableView(
-                "프로젝트를 선택하세요",
+                l10n.selectAProject,
                 systemImage: "folder",
-                description: Text("왼쪽 사이드바에서 프로젝트를 고르거나 새로 만드세요.")
+                description: Text(l10n.pickProjectFromSidebar)
             )
         } else if filteredAssets.isEmpty {
             ContentUnavailableView(
-                "아직 이미지가 없습니다",
+                l10n.noImagesYet,
                 systemImage: "wand.and.sparkles",
-                description: Text("아래 프롬프트 바에서 생성해 보세요.")
+                description: Text(l10n.tryFromPromptBar)
             )
         } else {
             GalleryGrid(assets: filteredAssets, columns: columns) { asset in

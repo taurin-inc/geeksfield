@@ -6,7 +6,7 @@ struct ModelSelector: View {
     var body: some View {
         Menu {
             if appState.modelRegistry.imageModels.isEmpty {
-                Text("사용 가능한 모델 없음").foregroundStyle(.secondary)
+                Text(appState.l10n.noAvailableModels).foregroundStyle(.secondary)
             } else {
                 ForEach(groupedByProvider, id: \.0) { provider, models in
                     Section(provider.displayName) {
@@ -26,7 +26,7 @@ struct ModelSelector: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "cpu").font(.caption)
-                Text(appState.selectedImageModel?.displayName ?? "모델 선택")
+                Text(appState.selectedImageModel?.displayName ?? appState.l10n.chooseModel)
                     .font(.callout.weight(.medium))
                     .lineLimit(1)
             }

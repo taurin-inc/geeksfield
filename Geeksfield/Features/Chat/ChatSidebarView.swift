@@ -11,6 +11,7 @@ struct ChatSidebarView: View {
             messageList
             inputBar
         }
+        .ignoresSafeArea(.container, edges: .top)
         .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 420)
     }
 
@@ -33,9 +34,9 @@ struct ChatSidebarView: View {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     if appState.chatMessages.isEmpty {
                         ContentUnavailableView(
-                            "대화를 시작하세요",
+                            appState.l10n.startConversation,
                             systemImage: "bubble.left.and.text.bubble.right",
-                            description: Text("모델을 선택한 뒤 메시지를 입력하세요.")
+                            description: Text(appState.l10n.chooseModelThenMessage)
                         )
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
@@ -60,7 +61,7 @@ struct ChatSidebarView: View {
 
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 6) {
-            TextField("메시지", text: $input, axis: .vertical)
+            TextField(appState.l10n.message, text: $input, axis: .vertical)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 6)
@@ -89,10 +90,10 @@ struct ChatSidebarView: View {
     private func submit() {
         guard let model = appState.selectedChatModel else {
             appState.errorBus.report(
-                title: "채팅 모델 필요",
+                title: appState.l10n.chatModelRequired,
                 message: appState.modelRegistry.chatModels.isEmpty
-                    ? "설정 > API Keys에서 키를 먼저 입력하세요."
-                    : "위 모델 메뉴에서 채팅 모델을 선택하세요."
+                    ? appState.l10n.enterKeyInSettings
+                    : appState.l10n.pickChatModelAbove
             )
             return
         }

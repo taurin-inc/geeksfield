@@ -1,11 +1,18 @@
 import Foundation
-import Security
 
 enum KeychainError: Error {
-    case unexpectedStatus(OSStatus)
     case encodingFailed
+    case ioFailed(Error)
 }
 
+/// API key store backed by a sandbox-private file in Application Support.
+///
+/// We initially used the macOS keychain, but ad-hoc-signed debug builds get a
+/// fresh code signature on every rebuild — and the keychain ACL stored on the
+/// item refers to the previous binary's signature. Each new build then prompts
+/// the user for their login password to rebind access. Storing keys inside the
+/// app's sandbox container avoids the ACL entirely; sandbox isolation already
+/// prevents other apps from reading the file.
 struct KeychainStore: Sendable {
     let service: String
 
@@ -14,76 +21,57 @@ struct KeychainStore: Sendable {
     }
 
     func setAPIKey(_ key: String, for provider: Provider) throws {
-        try set(account: provider.rawValue, value: key)
+        var dict = readDict()
+        dict[provider.rawValue] = key
+        try writeDict(dict)
     }
 
     func apiKey(for provider: Provider) -> String? {
-        try? get(account: provider.rawValue)
+        readDict()[provider.rawValue]
     }
 
     func deleteAPIKey(for provider: Provider) throws {
-        try delete(account: provider.rawValue)
+        var dict = readDict()
+        dict.removeValue(forKey: provider.rawValue)
+        try writeDict(dict)
     }
 
-    // MARK: - Generic helpers
+    // MARK: - Storage
 
-    private func set(account: String, value: String) throws {
-        guard let data = value.data(using: .utf8) else {
-            throw KeychainError.encodingFailed
+    private var fileURL: URL {
+        let fm = FileManager.default
+        let dir = (try? fm.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )) ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let appDir = dir.appendingPathComponent(service, isDirectory: true)
+        if !fm.fileExists(atPath: appDir.path) {
+            try? fm.createDirectory(at: appDir, withIntermediateDirectories: true)
         }
-        // Delete-then-add is more reliable than SecItemUpdate which can silently
-        // fail when accessibility attributes don't match. The cost is a single
-        // extra syscall; consistency wins.
-        let baseQuery: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account
-        ]
-        SecItemDelete(baseQuery as CFDictionary)
-
-        var addQuery = baseQuery
-        addQuery[kSecValueData] = data
-        addQuery[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlock
-
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw KeychainError.unexpectedStatus(status)
-        }
+        return appDir.appendingPathComponent("api-keys.json")
     }
 
-    private func get(account: String) throws -> String? {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account,
-            kSecReturnData: true,
-            kSecMatchLimit: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        switch status {
-        case errSecSuccess:
-            guard let data = item as? Data,
-                  let str = String(data: data, encoding: .utf8) else {
-                return nil
-            }
-            return str
-        case errSecItemNotFound:
-            return nil
-        default:
-            throw KeychainError.unexpectedStatus(status)
+    private func readDict() -> [String: String] {
+        guard let data = try? Data(contentsOf: fileURL),
+              let dict = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return [:]
         }
+        return dict
     }
 
-    private func delete(account: String) throws {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: account
-        ]
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw KeychainError.unexpectedStatus(status)
+    private func writeDict(_ dict: [String: String]) throws {
+        do {
+            let data = try JSONEncoder().encode(dict)
+            try data.write(to: fileURL, options: [.atomic])
+            // Restrict to owner read/write (0o600).
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: fileURL.path
+            )
+        } catch {
+            throw KeychainError.ioFailed(error)
         }
     }
 }

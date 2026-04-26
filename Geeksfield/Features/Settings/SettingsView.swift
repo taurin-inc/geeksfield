@@ -1,13 +1,15 @@
 import SwiftUI
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
-    case apiKeys, models, advanced
+    case general, apiKeys, models, advanced
     var id: Self { self }
-    var title: String {
+
+    func title(_ l10n: L10n) -> String {
         switch self {
-        case .apiKeys: return "API Keys"
-        case .models: return "Models"
-        case .advanced: return "Advanced"
+        case .general: return l10n.settingsGeneral
+        case .apiKeys: return l10n.settingsApiKeys
+        case .models: return l10n.settingsModels
+        case .advanced: return l10n.settingsAdvanced
         }
     }
 }
@@ -15,7 +17,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @State private var section: SettingsSection = .apiKeys
+    @State private var section: SettingsSection = .general
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,7 +40,7 @@ struct SettingsView: View {
     private var sectionPicker: some View {
         Picker("", selection: $section) {
             ForEach(SettingsSection.allCases) { s in
-                Text(s.title).tag(s)
+                Text(s.title(appState.l10n)).tag(s)
             }
         }
         .pickerStyle(.segmented)
@@ -52,6 +54,8 @@ struct SettingsView: View {
         ScrollView {
             Group {
                 switch section {
+                case .general:
+                    GeneralSection()
                 case .apiKeys:
                     VStack(alignment: .leading, spacing: 14) {
                         ProviderKeyRow(provider: .openai)
@@ -73,7 +77,7 @@ struct SettingsView: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button("완료") { dismiss() }
+            Button(appState.l10n.done) { dismiss() }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
         }

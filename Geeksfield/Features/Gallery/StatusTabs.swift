@@ -4,16 +4,17 @@ enum GalleryFilter: String, Hashable, CaseIterable, Identifiable {
     case all, picked
 
     var id: Self { self }
-    var localized: String {
+    func label(_ l10n: L10n) -> String {
         switch self {
-        case .all: return "전체"
-        case .picked: return "Picked"
+        case .all: return l10n.all
+        case .picked: return l10n.picked
         }
     }
 }
 
 /// Liquid-glass two-option pill switch. Sized to its content (no fill).
 struct StatusTabs: View {
+    @Environment(AppState.self) private var appState
     @Binding var filter: GalleryFilter
     @Namespace private var indicator
 
@@ -37,7 +38,7 @@ struct StatusTabs: View {
                 filter = option
             }
         } label: {
-            Text(option.localized)
+            Text(option.label(appState.l10n))
                 .font(.callout.weight(isSelected ? .semibold : .regular))
                 .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                 .padding(.horizontal, 14)

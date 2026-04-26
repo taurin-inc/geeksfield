@@ -26,10 +26,11 @@ struct InpaintSheet: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 12) {
-            Text("인페인트").font(.headline)
+        let l10n = appState.l10n
+        return HStack(spacing: 12) {
+            Text(l10n.inpaint).font(.headline)
             Spacer()
-            Text("브러시").font(.caption).foregroundStyle(.secondary)
+            Text(l10n.brush).font(.caption).foregroundStyle(.secondary)
             Slider(value: $editor.brushSize, in: 8...120)
                 .frame(width: 180)
             Text("\(Int(editor.brushSize))px").monospacedDigit().font(.caption)
@@ -38,7 +39,7 @@ struct InpaintSheet: View {
                 .disabled(!editor.canUndo)
             Button { editor.redo() } label: { Image(systemName: "arrow.uturn.forward") }
                 .disabled(!editor.canRedo)
-            Button("초기화") { editor.clear() }.disabled(!editor.canUndo)
+            Button(l10n.reset) { editor.clear() }.disabled(!editor.canUndo)
         }
         .buttonStyle(.glass)
         .padding(12)
@@ -53,23 +54,24 @@ struct InpaintSheet: View {
                     .onAppear { canvasSize = geo.size }
                     .onChange(of: geo.size) { _, new in canvasSize = new }
             } else {
-                ContentUnavailableView("원본 이미지를 찾을 수 없습니다", systemImage: "photo.badge.exclamationmark")
+                ContentUnavailableView(appState.l10n.originalImageNotFound, systemImage: "photo.badge.exclamationmark")
             }
         }
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 10) {
+        let l10n = appState.l10n
+        return HStack(spacing: 10) {
             inpaintModelMenu
-            TextField("수정 지시", text: $editor.prompt, axis: .vertical)
+            TextField(l10n.editInstruction, text: $editor.prompt, axis: .vertical)
                 .lineLimit(1...3)
                 .textFieldStyle(.roundedBorder)
             Spacer(minLength: 8)
-            Button("취소") { dismiss() }.buttonStyle(.glass)
+            Button(l10n.cancel) { dismiss() }.buttonStyle(.glass)
             Button {
                 submit()
             } label: {
-                Label("수정", systemImage: "wand.and.sparkles")
+                Label(l10n.edit, systemImage: "wand.and.sparkles")
             }
             .buttonStyle(.glassProminent)
             .disabled(!canSubmit)
@@ -98,7 +100,7 @@ struct InpaintSheet: View {
                 }
             }
         } label: {
-            Text(selectedModel?.displayName ?? "모델")
+            Text(selectedModel?.displayName ?? appState.l10n.modelLabel)
         }
         .menuStyle(.borderlessButton)
     }
@@ -129,7 +131,7 @@ struct InpaintSheet: View {
             imageFrame: imageFrame,
             style: style
         ) else {
-            appState.errorBus.report(title: "마스크 생성 실패", message: "")
+            appState.errorBus.report(title: appState.l10n.maskCreationFailed, message: "")
             return
         }
 

@@ -6,7 +6,7 @@ struct ChatModelSelector: View {
     var body: some View {
         Menu {
             if appState.modelRegistry.chatModels.isEmpty {
-                Text("사용 가능한 모델 없음").foregroundStyle(.secondary)
+                Text(appState.l10n.noAvailableModels).foregroundStyle(.secondary)
             } else {
                 ForEach(grouped, id: \.0) { provider, models in
                     Section(provider.displayName) {
@@ -26,7 +26,7 @@ struct ChatModelSelector: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "bubble.left.and.text.bubble.right").font(.caption)
-                Text(appState.selectedChatModel?.displayName ?? "채팅 모델")
+                Text(appState.selectedChatModel?.displayName ?? appState.l10n.chatModel)
                     .font(.callout.weight(.medium))
                     .lineLimit(1)
             }
