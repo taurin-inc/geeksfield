@@ -7,5 +7,16 @@
     <link>https://rapid-studio.github.io/geeksfield/appcast.xml</link>
     <description>Geeksfield release feed for Sparkle updates.</description>
     <language>en</language>
+    <item>
+      <title>Version 0.1.0</title>
+      <pubDate>Mon, 04 May 2026 18:54:24 +0000</pubDate>
+      <sparkle:releaseNotesLink>https://github.com/rapid-studio/geeksfield/releases/tag/v0.1.0</sparkle:releaseNotesLink>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+      <enclosure url="https://github.com/rapid-studio/geeksfield/releases/download/v0.1.0/Geeksfield-v0.1.0.zip"
+                 length="2296349"
+                 type="application/octet-stream"
+                 sparkle:edSignature="a/NJGsQQPgiID9k6o62wKsZe2MWJC7eiDyLMkop/srxAD/mdePo5v1gtdJrn7Ehv2rcVJkeCRMG3koQvBFY1Cg==" />
+    </item>
   </channel>
 </rss>
