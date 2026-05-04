@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -259,11 +260,20 @@ jobs:
           end
           RUBY
 
-      - name: Publish appcast to GitHub Pages source
+      - name: Open appcast update pull request
         if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="release/${{ steps.version.outputs.tag }}-appcast"
+          git switch -c "$BRANCH"
           git add docs/appcast.xml
           git commit -m "Update appcast for ${{ steps.version.outputs.tag }}"
-          git push origin HEAD:main
+          git push origin "$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Update appcast for ${{ steps.version.outputs.tag }}" \
+            --body "Publishes the Sparkle appcast entry for ${{ steps.version.outputs.tag }} after the notarized GitHub Release asset was uploaded."
