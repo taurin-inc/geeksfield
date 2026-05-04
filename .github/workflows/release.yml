@@ -8,7 +8,8 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -260,20 +261,21 @@ jobs:
           end
           RUBY
 
-      - name: Open appcast update pull request
+      - name: Validate appcast
         if: steps.existing_tag.outputs.exists == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          BRANCH="release/${{ steps.version.outputs.tag }}-appcast"
-          git switch -c "$BRANCH"
-          git add docs/appcast.xml
-          git commit -m "Update appcast for ${{ steps.version.outputs.tag }}"
-          git push origin "$BRANCH"
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "Update appcast for ${{ steps.version.outputs.tag }}" \
-            --body "Publishes the Sparkle appcast entry for ${{ steps.version.outputs.tag }} after the notarized GitHub Release asset was uploaded."
+          xmllint --noout docs/appcast.xml
+
+      - name: Configure GitHub Pages
+        if: steps.existing_tag.outputs.exists == 'false'
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        if: steps.existing_tag.outputs.exists == 'false'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy appcast to GitHub Pages
+        if: steps.existing_tag.outputs.exists == 'false'
+        uses: actions/deploy-pages@v4
