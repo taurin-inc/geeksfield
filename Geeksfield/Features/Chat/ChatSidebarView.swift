@@ -17,13 +17,7 @@ struct ChatSidebarView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     if appState.chatMessages.isEmpty {
-                        ContentUnavailableView(
-                            appState.l10n.startConversation,
-                            systemImage: "bubble.left.and.text.bubble.right",
-                            description: Text(appState.l10n.chatUsesCodex)
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
+                        emptyState
                     } else {
                         ForEach(appState.chatMessages) { message in
                             ChatMessageBubble(message: message)
@@ -46,6 +40,7 @@ struct ChatSidebarView: View {
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 6) {
             TextField(appState.l10n.message, text: $input, axis: .vertical)
+                .font(.callout)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 6)
@@ -69,6 +64,28 @@ struct ChatSidebarView: View {
         .padding(8)
         .glassEffect(.regular, in: .rect(cornerRadius: 14))
         .padding(10)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "bubble.left.and.text.bubble.right")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Text(appState.l10n.startConversation)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+
+            Text(appState.l10n.chatUsesCodex)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 14)
+        .padding(.top, 60)
     }
 
     private var canSubmit: Bool {

@@ -7,19 +7,20 @@ struct IterationBoardView: View {
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: gridColumns, spacing: 10) {
                 ForEach(groups) { group in
                     IterationGroupCard(group: group, onSelect: onSelect)
                 }
             }
+            .frame(maxWidth: .infinity)
             .padding(12)
         }
     }
 
     private var gridColumns: [GridItem] {
         Array(
-            repeating: GridItem(.flexible(minimum: 160, maximum: 320), spacing: 10),
-            count: max(2, min(columns, 6))
+            repeating: GridItem(.flexible(minimum: 0), spacing: 10),
+            count: max(3, min(columns, 6))
         )
     }
 }
