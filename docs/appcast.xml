@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0"
-     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
-     xmlns:dc="http://purl.org/dc/elements/1.1/">
+<rss version='2.0' xmlns:sparkle='http://www.andymatuschak.org/xml-namespaces/sparkle' xmlns:dc='http://purl.org/dc/elements/1.1/'>
   <channel>
     <title>Geeksfield Updates</title>
     <link>https://rapid-studio.github.io/geeksfield/appcast.xml</link>
@@ -13,10 +11,15 @@
       <sparkle:releaseNotesLink>https://github.com/rapid-studio/geeksfield/releases/tag/v0.1.0</sparkle:releaseNotesLink>
       <sparkle:version>1</sparkle:version>
       <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-      <enclosure url="https://github.com/rapid-studio/geeksfield/releases/download/v0.1.0/Geeksfield-v0.1.0.zip"
-                 length="2296349"
-                 type="application/octet-stream"
-                 sparkle:edSignature="a/NJGsQQPgiID9k6o62wKsZe2MWJC7eiDyLMkop/srxAD/mdePo5v1gtdJrn7Ehv2rcVJkeCRMG3koQvBFY1Cg==" />
+      <enclosure url='https://github.com/rapid-studio/geeksfield/releases/download/v0.1.0/Geeksfield-v0.1.0.zip' length='2296349' type='application/octet-stream' sparkle:edSignature='a/NJGsQQPgiID9k6o62wKsZe2MWJC7eiDyLMkop/srxAD/mdePo5v1gtdJrn7Ehv2rcVJkeCRMG3koQvBFY1Cg=='/>
+    </item>
+    <item>
+      <title>Version 0.1.1</title>
+      <pubDate>Mon, 04 May 2026 19:13:38 -0000</pubDate>
+      <sparkle:releaseNotesLink>https://github.com/rapid-studio/geeksfield/releases/tag/v0.1.1</sparkle:releaseNotesLink>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+      <enclosure url='https://github.com/rapid-studio/geeksfield/releases/download/v0.1.1/Geeksfield-v0.1.1.zip' length='2323030' type='application/octet-stream' sparkle:edSignature='1JSR5uogPjEfIDC0aQ7sguAMr9YxHnnzgrg0RcxQoFLsySuWMEwEAc13R9mioTFCmW2zUMn35iz6l5rOrxqpCQ=='/>
     </item>
   </channel>
 </rss>
