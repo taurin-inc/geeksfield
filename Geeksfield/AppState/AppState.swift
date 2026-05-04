@@ -39,6 +39,7 @@ final class AppState {
     var presentedAsset: ImageAsset?
     var selectedImageModel: ModelDescriptor?
     var selectedChatModel: ModelDescriptor?
+    var activeBaseImageID: String?
     var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "geeksfield.onboarding.completed")
     var language: Language = {
         let raw = UserDefaults.standard.string(forKey: "geeksfield.language") ?? Language.korean.rawValue
@@ -56,11 +57,14 @@ final class AppState {
     private let lastImageIDKey = "geeksfield.lastImage.id"
     private let lastChatProviderKey = "geeksfield.lastChat.provider"
     private let lastChatIDKey = "geeksfield.lastChat.id"
+    private let stalePendingInterval: TimeInterval = 20 * 60
 
     var connectedProviders: Set<Provider> {
         var set: Set<Provider> = []
         for p in Provider.allCases {
-            if let key = keychain.apiKey(for: p), !key.isEmpty {
+            if p == .codex, CodexAuthStore().isSignedIn() {
+                set.insert(p)
+            } else if let key = keychain.apiKey(for: p), !key.isEmpty {
                 set.insert(p)
             }
         }
@@ -70,6 +74,19 @@ final class AppState {
     var selectedProjectAssets: [ImageAsset] {
         guard let id = selectedProjectID else { return [] }
         return assetsByProject[id] ?? []
+    }
+
+    var selectedProjectRuns: [IterationRun] {
+        IterationRun.group(selectedProjectAssets)
+    }
+
+    var defaultChatModel: ModelDescriptor? {
+        selectedChatModel ?? selectedImageModel ?? modelRegistry.imageModels.first
+    }
+
+    var activeBaseAsset: ImageAsset? {
+        guard let activeBaseImageID else { return nil }
+        return selectedProjectAssets.first { $0.id == activeBaseImageID }
     }
 
     // MARK: - Bootstrap
@@ -148,11 +165,11 @@ final class AppState {
 
     // MARK: - Projects
 
-    func reloadProjects() {
+    func reloadProjects(recoverInterruptedPending: Bool = true) {
         do {
             projects = try projectStore.listProjects()
             for p in projects {
-                refreshAssets(for: p.id)
+                refreshAssets(for: p.id, recoverInterruptedPending: recoverInterruptedPending)
             }
             // Always keep a project selected when at least one exists.
             if let current = selectedProjectID,
@@ -180,8 +197,13 @@ final class AppState {
 
     // MARK: - Assets
 
-    func refreshAssets(for projectID: String) {
-        let metas = (try? metadataStore.list(projectID: projectID)) ?? []
+    func refreshAssets(for projectID: String, recoverInterruptedPending: Bool = false) {
+        var metas = (try? metadataStore.list(projectID: projectID)) ?? []
+        recoverPendingAssets(
+            projectID: projectID,
+            metas: &metas,
+            recoverInterruptedPending: recoverInterruptedPending
+        )
         let fm = FileManager.default
         let assets: [ImageAsset] = metas.map { meta in
             let file = (try? imageStore.locate(projectID: projectID, imageID: meta.id)) ?? nil
@@ -193,9 +215,36 @@ final class AppState {
         assetsByProject[projectID] = assets
     }
 
+    private func recoverPendingAssets(
+        projectID: String,
+        metas: inout [ImageMetadata],
+        recoverInterruptedPending: Bool
+    ) {
+        let staleCutoff = Date().addingTimeInterval(-stalePendingInterval)
+        for index in metas.indices where metas[index].status == .pending {
+            let isInterrupted = recoverInterruptedPending
+            let isStale = metas[index].createdAt < staleCutoff
+            guard isInterrupted || isStale else { continue }
+
+            if let _ = try? imageStore.locate(projectID: projectID, imageID: metas[index].id) {
+                metas[index].status = .draft
+                metas[index].failureReason = nil
+            } else {
+                metas[index].status = .failed
+                metas[index].failureReason = isInterrupted
+                    ? l10n.interruptedGenerationReason
+                    : l10n.staleGenerationReason
+            }
+            try? metadataStore.write(metas[index])
+        }
+    }
+
     func deleteAsset(_ asset: ImageAsset) {
         let pid = asset.metadata.projectID
         do {
+            if activeBaseImageID == asset.id {
+                activeBaseImageID = nil
+            }
             if asset.fileURL == nil {
                 // pending or failed placeholders have no file yet.
                 try metadataStore.delete(projectID: pid, imageID: asset.id)
@@ -247,6 +296,16 @@ final class AppState {
         }
     }
 
+    func setBaseImage(_ asset: ImageAsset) {
+        guard asset.hasFile else { return }
+        activeBaseImageID = asset.id
+        pendingReferenceIDs.removeAll { $0 == asset.id }
+    }
+
+    func clearBaseImage() {
+        activeBaseImageID = nil
+    }
+
     func attachExternalReference(url: URL) {
         guard let pid = selectedProjectID else { return }
         do {
@@ -263,6 +322,80 @@ final class AppState {
 
     func clearReferences() {
         pendingReferenceIDs.removeAll()
+    }
+
+    func asset(withID id: String, in projectID: String? = nil) -> ImageAsset? {
+        let assets = projectID.flatMap { assetsByProject[$0] } ?? selectedProjectAssets
+        return assets.first { $0.id == id }
+    }
+
+    func parentAsset(for asset: ImageAsset) -> ImageAsset? {
+        guard let parentID = asset.metadata.parentImageID else { return nil }
+        return self.asset(withID: parentID, in: asset.metadata.projectID)
+    }
+
+    func childAssets(of asset: ImageAsset) -> [ImageAsset] {
+        (assetsByProject[asset.metadata.projectID] ?? [])
+            .filter { $0.metadata.parentImageID == asset.id }
+            .sorted(by: sortRelatedAssets)
+    }
+
+    func runAssets(for asset: ImageAsset) -> [ImageAsset] {
+        let runID = asset.metadata.runID ?? asset.id
+        return (assetsByProject[asset.metadata.projectID] ?? [])
+            .filter { ($0.metadata.runID ?? $0.id) == runID }
+            .sorted(by: sortRelatedAssets)
+    }
+
+    func threadRuns(for asset: ImageAsset) -> [IterationRun] {
+        let assets = assetsByProject[asset.metadata.projectID] ?? []
+        let runs = IterationRun.group(assets).sorted {
+            if $0.createdAt == $1.createdAt { return $0.id < $1.id }
+            return $0.createdAt < $1.createdAt
+        }
+        let runsByID = Dictionary(uniqueKeysWithValues: runs.map { ($0.id, $0) })
+        let currentRunID = asset.metadata.runID ?? asset.id
+
+        var ancestors: [IterationRun] = []
+        var visited: Set<String> = []
+        var cursor = runsByID[currentRunID]
+        while let run = cursor, !visited.contains(run.id) {
+            ancestors.insert(run, at: 0)
+            visited.insert(run.id)
+            guard let parentID = run.parentImageID,
+                  let parent = self.asset(withID: parentID, in: asset.metadata.projectID) else {
+                break
+            }
+            cursor = runsByID[parent.metadata.runID ?? parent.id]
+        }
+
+        var result: [IterationRun] = []
+        var included: Set<String> = []
+        for run in ancestors {
+            let siblingRuns: [IterationRun]
+            if let parentID = run.parentImageID {
+                siblingRuns = runs.filter { $0.parentImageID == parentID }
+            } else {
+                siblingRuns = [run]
+            }
+            for sibling in siblingRuns where !included.contains(sibling.id) {
+                result.append(sibling)
+                included.insert(sibling.id)
+            }
+        }
+
+        func appendDescendants(of imageID: String) {
+            let childRuns = runs.filter { $0.parentImageID == imageID }
+            for run in childRuns where !included.contains(run.id) {
+                result.append(run)
+                included.insert(run.id)
+                for child in run.assets {
+                    appendDescendants(of: child.id)
+                }
+            }
+        }
+        appendDescendants(of: asset.id)
+        return result
     }
 
     func referenceThumbnailURL(for id: String) -> URL? {
@@ -380,6 +513,7 @@ final class AppState {
             aspectRatio: meta.aspectRatio,
             batchSize: 1,
             referenceIDs: meta.referenceIDs,
+            parentImageID: meta.parentImageID,
             seed: meta.seed
         )
         generate(request: request)
@@ -387,6 +521,16 @@ final class AppState {
 
     func useAsReference(_ asset: ImageAsset) {
         attachReference(imageID: asset.id)
+    }
+
+    private func sortRelatedAssets(_ lhs: ImageAsset, _ rhs: ImageAsset) -> Bool {
+        let leftIndex = lhs.metadata.variantIndex ?? Int.max
+        let rightIndex = rhs.metadata.variantIndex ?? Int.max
+        if leftIndex != rightIndex { return leftIndex < rightIndex }
+        if lhs.metadata.createdAt != rhs.metadata.createdAt {
+            return lhs.metadata.createdAt < rhs.metadata.createdAt
+        }
+        return lhs.id < rhs.id
     }
 
     // MARK: - Chat

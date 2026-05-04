@@ -4,8 +4,8 @@ import Foundation
 import UniformTypeIdentifiers
 
 enum MaskStyle {
-    /// OpenAI style: PNG with transparent (alpha=0) pixels where the image
-    /// should be edited, opaque elsewhere.
+    /// Transparent style: PNG with alpha=0 pixels where the image should be
+    /// edited, opaque elsewhere.
     case openAITransparent
     /// White-on-black style: white where edited, black elsewhere. Useful for
     /// providers that expect a binary mask as a separate image.
@@ -22,7 +22,7 @@ enum InpaintMaskEncoder {
     ///   - imageFrame: the rect inside `viewSize` where the image was actually
     ///     laid out (since AsyncImage uses scaledToFit, the image is centered
     ///     with letterboxing on one axis).
-    ///   - style: OpenAI-transparent or white-on-black.
+    ///   - style: transparent or white-on-black.
     static func encode(
         strokes: [InpaintStroke],
         viewSize: CGSize,

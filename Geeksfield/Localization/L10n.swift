@@ -34,6 +34,7 @@ struct L10n: Sendable, Equatable {
     var cancel: String { t("취소", "Cancel") }
     var ok: String { t("확인", "OK") }
     var delete: String { t("삭제", "Delete") }
+    var deleteImage: String { t("삭제하기", "Delete") }
     var save: String { t("저장하기", "Save") }
     var close: String { t("닫기", "Close") }
     var edit: String { t("수정", "Edit") }
@@ -54,13 +55,15 @@ struct L10n: Sendable, Equatable {
     var notConnected: String { t("미연결", "Not connected") }
 
     // MARK: Settings
-    var settingsApiKeys: String { "API Keys" }
+    var settingsSubtitle: String { t("Codex 연결과 앱 기본 설정을 관리합니다.", "Manage your Codex connection and app preferences.") }
+    var settingsApiKeys: String { t("연결", "Connections") }
     var settingsModels: String { t("모델", "Models") }
     var settingsAdvanced: String { t("고급", "Advanced") }
     var settingsGeneral: String { t("일반", "General") }
     var language: String { t("언어", "Language") }
+    var updates: String { t("업데이트", "Updates") }
 
-    // API Keys section
+    // Connections section
     var getKey: String { t("키 발급", "Get key") }
     var enterToReplace: String { t("새 키로 교체하려면 입력", "Enter to replace existing key") }
     var replaceAndVerify: String { t("교체 & 검증", "Replace & Verify") }
@@ -73,6 +76,10 @@ struct L10n: Sendable, Equatable {
         t("유효한 키 · 모델 \(n)개", "Valid key · \(n) models")
     }
     var verificationFailed: String { t("검증 실패", "Verification failed") }
+    var codexLoginDetected: String { t("Codex 로그인 감지됨", "Codex login detected") }
+    var codexLoginMissing: String { t("터미널에서 codex login을 먼저 실행하세요.", "Run codex login in Terminal first.") }
+    var codexUsesSubscription: String { t("Codex 구독 로그인 사용", "Uses your Codex subscription login") }
+    var checkCodexLogin: String { t("로그인 확인", "Check Login") }
 
     // Advanced
     var modelDiscovery: String { "Model discovery" }
@@ -81,17 +88,22 @@ struct L10n: Sendable, Equatable {
 
     // Models catalog
     var noModelsYet: String { t("아직 모델이 없습니다", "No models yet") }
-    var connectKeyFirst: String { t("API 키를 먼저 연결하세요.", "Connect an API key first.") }
+    var connectKeyFirst: String { t("Codex 로그인을 먼저 연결하세요.", "Connect Codex login first.") }
     var discoveredModels: String { "Discovered models" }
 
     // MARK: Chat
     var noAvailableModels: String { t("사용 가능한 모델 없음", "No available models") }
     var chatModel: String { t("채팅 모델", "Chat Model") }
+    var codexChat: String { t("Codex 채팅", "Codex Chat") }
+    var chatUsesCodex: String { t("Codex 로그인으로 바로 대화할 수 있습니다.", "Chat uses your Codex login automatically.") }
+    var codexLoginRequired: String { t("Codex 로그인 필요", "Codex login required") }
+    var showChatPanel: String { t("대화 패널 보이기", "Show chat panel") }
+    var hideChatPanel: String { t("대화 패널 숨기기", "Hide chat panel") }
     var startConversation: String { t("대화를 시작하세요", "Start a conversation") }
-    var chooseModelThenMessage: String { t("모델을 선택한 뒤 메시지를 입력하세요.", "Choose a model, then enter a message.") }
+    var chooseModelThenMessage: String { t("메시지를 입력하세요.", "Enter a message.") }
     var message: String { t("메시지", "Message") }
     var chatModelRequired: String { t("채팅 모델 필요", "Chat model required") }
-    var enterKeyInSettings: String { t("설정 > API Keys에서 키를 먼저 입력하세요.", "Enter a key in Settings > API Keys first.") }
+    var enterKeyInSettings: String { t("설정 > 연결에서 Codex 로그인을 먼저 확인하세요.", "Check Codex login in Settings > Connections first.") }
     var pickChatModelAbove: String { t("위 모델 메뉴에서 채팅 모델을 선택하세요.", "Select a chat model from the menu above.") }
 
     // MARK: Gallery
@@ -108,10 +120,26 @@ struct L10n: Sendable, Equatable {
 
     // MARK: ImageDetail
     var regenerate: String { t("다시 만들기", "Regenerate") }
+    var retryGeneration: String { t("다시 생성하기", "Regenerate") }
     var useAsReference: String { t("레퍼런스로 사용", "Use as Reference") }
+    var useAsBase: String { t("기준으로 이어가기", "Use as Base") }
+    var baseImage: String { t("기준 이미지", "Base Image") }
+    var continueFromHere: String { t("이 이미지로 이어가기", "Continue From Here") }
+    var currentImage: String { t("현재 이미지", "Current Image") }
+    var sameRun: String { t("같은 시안", "Same Run") }
+    var parentImage: String { t("부모 이미지", "Parent Image") }
+    var childImages: String { t("파생 이미지", "Child Images") }
+    var iterationBoard: String { t("작업 보드", "Board") }
+    var iterationThread: String { t("작업 흐름", "Thread") }
+    var more: String { t("더보기", "More") }
+    var variants: String { t("시안", "Variants") }
+    var requests: String { t("요청", "Requests") }
     var reference: String { t("레퍼런스", "Reference") }
     var generationFailed: String { t("생성 실패", "Generation failed") }
     var failureSection: String { t("실패", "Failure") }
+    var unknownFailureReason: String {
+        t("실패 이유를 확인할 수 없습니다.", "No failure reason is available.")
+    }
     var prompt: String { "Prompt" }
     var information: String { t("정보", "Information") }
     var overview: String { t("개요", "Overview") }
@@ -153,6 +181,7 @@ struct L10n: Sendable, Equatable {
     var promptPlaceholder: String { t("무엇을 그릴까요?", "Describe the scene you imagine") }
     var sizeLabel: String { t("크기", "Size") }
     var aspectLabel: String { t("비율", "Aspect") }
+    func imageCount(_ n: Int) -> String { t("\(n)장", "\(n) images") }
     var promptRequired: String { t("프롬프트 필요", "Prompt required") }
     var enterWhatToDraw: String { t("무엇을 그릴지 입력하세요.", "Enter what you want to draw.") }
     var projectRequired: String { t("프로젝트 선택 필요", "Project required") }
@@ -174,6 +203,18 @@ struct L10n: Sendable, Equatable {
 
     // MARK: AppState error titles
     var imageGenerationFailed: String { t("이미지 생성 실패", "Image generation failed") }
+    var interruptedGenerationReason: String {
+        t(
+            "앱이 재시작되어 이전 생성 작업을 이어갈 수 없습니다. 다시 생성해 주세요.",
+            "The app restarted before this generation completed. Please generate it again."
+        )
+    }
+    var staleGenerationReason: String {
+        t(
+            "생성 응답 시간이 너무 오래 걸려 작업을 중단했습니다. 다시 시도해 주세요.",
+            "Generation took too long and was stopped. Please try again."
+        )
+    }
     var referenceAddFailed: String { t("레퍼런스 추가 실패", "Failed to add reference") }
     var inpaintFailed: String { t("인페인트 실패", "Inpaint failed") }
     var cannotReadOriginal: String { t("원본 이미지를 읽을 수 없습니다.", "Cannot read original image.") }
@@ -191,7 +232,7 @@ struct L10n: Sendable, Equatable {
 
     // MARK: Onboarding
     var welcome: String { t("환영합니다", "Welcome") }
-    var onboardingSubtitle: String { t("API 키를 연결하고 시작하세요.", "Connect an API key to get started.") }
+    var onboardingSubtitle: String { t("Codex 로그인을 연결하고 시작하세요.", "Connect Codex login to get started.") }
     var getStarted: String { t("시작하기", "Get Started") }
     var skipForNow: String { t("나중에", "Skip for now") }
 }

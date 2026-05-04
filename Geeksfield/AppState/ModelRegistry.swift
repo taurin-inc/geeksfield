@@ -23,8 +23,7 @@ final class ModelRegistry {
         keychain: KeychainStore = KeychainStore(),
         catalogStore: ModelCatalogStore = ModelCatalogStore(),
         listers: [Provider: any ModelLister] = [
-            .openai: OpenAIModelLister(),
-            .gemini: GeminiModelLister()
+            .codex: CodexModelLister()
         ]
     ) {
         self.keychain = keychain
@@ -41,9 +40,9 @@ final class ModelRegistry {
 
         var provided: [Provider: [String]] = [:]
         for provider in Provider.allCases {
-            guard let key = keychain.apiKey(for: provider),
-                  !key.isEmpty,
-                  let lister = listers[provider] else { continue }
+            guard let lister = listers[provider] else { continue }
+            let key = keychain.apiKey(for: provider) ?? ""
+            if provider.usesAPIKey && key.isEmpty { continue }
             do {
                 let ids = try await lister.listAvailableModelIDs(apiKey: key)
                 provided[provider] = ids

@@ -1,35 +1,21 @@
 import SwiftUI
 
-private enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, apiKeys, models, advanced
-    var id: Self { self }
-
-    func title(_ l10n: L10n) -> String {
-        switch self {
-        case .general: return l10n.settingsGeneral
-        case .apiKeys: return l10n.settingsApiKeys
-        case .models: return l10n.settingsModels
-        case .advanced: return l10n.settingsAdvanced
-        }
-    }
-}
-
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @State private var section: SettingsSection = .general
 
     var body: some View {
-        VStack(spacing: 0) {
-            sectionPicker
-            Divider()
+        VStack(alignment: .leading, spacing: 18) {
+            header
             content
-            Divider()
             footer
         }
-        .frame(width: 580, height: 560)
+        .padding(20)
+        .frame(width: 520)
         .controlSize(.regular)
         .buttonBorderShape(.automatic)
+        .background(.regularMaterial)
+        .background(Color.black.opacity(0.20))
         .background {
             Button("Close") { dismiss() }
                 .keyboardShortcut(.cancelAction)
@@ -37,41 +23,31 @@ struct SettingsView: View {
         }
     }
 
-    private var sectionPicker: some View {
-        Picker("", selection: $section) {
-            ForEach(SettingsSection.allCases) { s in
-                Text(s.title(appState.l10n)).tag(s)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(appState.l10n.settings)
+                    .font(.title2.weight(.bold))
+                Spacer()
             }
+
+            Text(appState.l10n.settingsSubtitle)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
-    @ViewBuilder
     private var content: some View {
-        ScrollView {
-            Group {
-                switch section {
-                case .general:
-                    GeneralSection()
-                case .apiKeys:
-                    VStack(alignment: .leading, spacing: 14) {
-                        ProviderKeyRow(provider: .openai)
-                        ProviderKeyRow(provider: .gemini)
-                    }
-                case .models:
-                    ModelCatalogSection()
-                case .advanced:
-                    AdvancedSection()
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(appState.l10n.settingsApiKeys)
+                    .font(.headline)
+                CodexLoginRow()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 18)
+
+            GeneralSection()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var footer: some View {
@@ -81,7 +57,43 @@ struct SettingsView: View {
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.top, 2)
+    }
+}
+
+struct SettingsCard<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.055))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            }
+    }
+}
+
+struct SettingsIconTile: View {
+    let systemName: String
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color.white.opacity(0.07))
+            .frame(width: 36, height: 36)
+            .overlay {
+                Image(systemName: systemName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
     }
 }

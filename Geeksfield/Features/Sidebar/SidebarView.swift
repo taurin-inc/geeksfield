@@ -106,8 +106,7 @@ struct SidebarView: View {
             Spacer()
 
             HStack(spacing: 8) {
-                providerDot(.openai)
-                providerDot(.gemini)
+                providerDot(.codex)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)

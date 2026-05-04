@@ -5,7 +5,7 @@ enum KeychainError: Error {
     case ioFailed(Error)
 }
 
-/// API key store backed by a sandbox-private file in Application Support.
+/// Legacy credential store backed by a sandbox-private file in Application Support.
 ///
 /// We initially used the macOS keychain, but ad-hoc-signed debug builds get a
 /// fresh code signature on every rebuild — and the keychain ACL stored on the

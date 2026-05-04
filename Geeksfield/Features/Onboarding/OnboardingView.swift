@@ -9,8 +9,7 @@ struct OnboardingView: View {
                 hero
 
                 VStack(spacing: 12) {
-                    ProviderKeyRow(provider: .openai)
-                    ProviderKeyRow(provider: .gemini)
+                    CodexLoginRow()
                 }
 
                 footer

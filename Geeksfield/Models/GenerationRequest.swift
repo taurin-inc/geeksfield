@@ -9,5 +9,6 @@ struct GenerationRequest: Hashable, Sendable {
     let aspectRatio: String?
     let batchSize: Int
     let referenceIDs: [String]
+    let parentImageID: String?
     let seed: Int?
 }

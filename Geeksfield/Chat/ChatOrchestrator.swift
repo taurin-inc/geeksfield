@@ -8,8 +8,7 @@ final class ChatOrchestrator {
 
     init(
         providers: [Provider: any ChatProvider] = [
-            .openai: OpenAIChatProvider(),
-            .gemini: GeminiChatProvider()
+            .codex: CodexChatProvider()
         ],
         log: ChatLogStore = ChatLogStore(),
         keychain: KeychainStore = KeychainStore()
@@ -27,7 +26,8 @@ final class ChatOrchestrator {
         guard let provider = providers[model.provider] else {
             throw ChatOrchestratorError.unsupportedProvider(model.provider)
         }
-        guard let apiKey = keychain.apiKey(for: model.provider), !apiKey.isEmpty else {
+        let apiKey = keychain.apiKey(for: model.provider) ?? ""
+        guard !model.provider.usesAPIKey || !apiKey.isEmpty else {
             throw ChatOrchestratorError.missingAPIKey(model.provider)
         }
 
@@ -50,7 +50,7 @@ enum ChatOrchestratorError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedProvider(let p): return "Unsupported provider: \(p.displayName)"
-        case .missingAPIKey(let p): return "Missing API key for \(p.displayName)"
+        case .missingAPIKey(let p): return "Missing credentials for \(p.displayName)"
         }
     }
 }

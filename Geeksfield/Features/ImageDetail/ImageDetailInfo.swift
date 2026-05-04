@@ -6,6 +6,7 @@ struct ImageDetailInfo: View {
     let onEdit: () -> Void
     let onRegenerate: () -> Void
     let onUseAsReference: () -> Void
+    let onUseAsBase: () -> Void
     let onExport: () -> Void
     let onPick: () -> Void
     let onDelete: () -> Void
@@ -23,6 +24,7 @@ struct ImageDetailInfo: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     promptSection
+                    relationshipSection
                     informationSection
                     if let reason = metadata.failureReason {
                         failureSection(reason: reason)
@@ -209,6 +211,8 @@ struct ImageDetailInfo: View {
             Button(l10n.regenerate, systemImage: "arrow.triangle.2.circlepath", action: onRegenerate)
             Button(l10n.edit, systemImage: "wand.and.stars", action: onEdit)
                 .disabled(!asset.hasFile)
+            Button(l10n.useAsBase, systemImage: "target", action: onUseAsBase)
+                .disabled(!asset.hasFile)
             Button(l10n.useAsReference, systemImage: "photo.on.rectangle", action: onUseAsReference)
                 .disabled(!asset.hasFile)
             Divider()
@@ -232,6 +236,92 @@ struct ImageDetailInfo: View {
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .fixedSize()
+    }
+
+    // MARK: - Relationships
+
+    @ViewBuilder
+    private var relationshipSection: some View {
+        let parent = appState.parentAsset(for: asset)
+        let runAssets = appState.runAssets(for: asset).filter { $0.id != asset.id }
+        let children = appState.childAssets(of: asset)
+
+        if parent != nil || !runAssets.isEmpty || !children.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel(appState.l10n.iterationBoard.uppercased(), system: "point.3.connected.trianglepath.dotted")
+
+                VStack(alignment: .leading, spacing: 12) {
+                    if let parent {
+                        relationRow(title: l10n.parentImage, assets: [parent])
+                    }
+                    if !runAssets.isEmpty {
+                        relationRow(title: l10n.sameRun, assets: runAssets)
+                    }
+                    if !children.isEmpty {
+                        relationRow(title: l10n.childImages, assets: children)
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
+            }
+        }
+    }
+
+    private func relationRow(title: String, assets: [ImageAsset]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(assets) { related in
+                        Button {
+                            appState.presentedAsset = related
+                        } label: {
+                            relationThumb(related)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func relationThumb(_ asset: ImageAsset) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            Group {
+                if let url = asset.thumbnailURL ?? asset.fileURL {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            Color.white.opacity(0.06)
+                        }
+                    }
+                } else {
+                    Color.white.opacity(0.06)
+                }
+            }
+            .frame(width: 72, height: 72)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(asset.id == self.asset.id ? Color.accentColor : Color.white.opacity(0.10), lineWidth: 1)
+            }
+
+            if let index = asset.metadata.variantIndex {
+                Text("#\(index)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                    .padding(5)
+            }
+        }
     }
 
     // MARK: - Helpers

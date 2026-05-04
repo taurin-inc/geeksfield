@@ -1,7 +1,7 @@
 import Foundation
 
 /// Coordinates a batch image generation:
-///   1. Writes N placeholder metadata entries (status .failed) so the UI can
+///   1. Writes N placeholder metadata entries (status .pending) so the UI can
 ///      show inflight tiles immediately.
 ///   2. Fires N parallel provider calls. Each success overwrites the placeholder
 ///      with a .draft entry + saved PNG + thumbnail; each failure leaves the
@@ -19,8 +19,7 @@ final class GenerationOrchestrator {
 
     init(
         providers: [Provider: any ImageProvider] = [
-            .openai: OpenAIImageProvider(),
-            .gemini: GeminiImageProvider()
+            .codex: CodexImageProvider()
         ],
         imageStore: ImageStore = ImageStore(),
         metadataStore: MetadataStore = MetadataStore(),
@@ -56,8 +55,9 @@ final class GenerationOrchestrator {
         guard let provider = providers[request.model.provider] else {
             throw ImageProviderError.unsupportedOperation("No provider for \(request.model.provider)")
         }
-        guard let apiKey = keychain.apiKey(for: request.model.provider), !apiKey.isEmpty else {
-            throw ImageProviderError.unsupportedOperation("Missing API key for \(request.model.provider.displayName)")
+        let apiKey = keychain.apiKey(for: request.model.provider) ?? ""
+        if request.model.provider.usesAPIKey && apiKey.isEmpty {
+            throw ImageProviderError.unsupportedOperation("Missing credentials for \(request.model.provider.displayName)")
         }
 
         // Placeholder metadata up front so tiles appear immediately. Status is
@@ -65,8 +65,12 @@ final class GenerationOrchestrator {
         let slotIDs: [String] = (0..<request.batchSize).map { _ in
             UUID().uuidString.lowercased()
         }
+        let runID = UUID().uuidString.lowercased()
         let now = Date()
-        for id in slotIDs {
+        let operation: ImageOperation = request.parentImageID == nil && request.referenceIDs.isEmpty
+            ? .generate
+            : .reference
+        for (slot, id) in slotIDs.enumerated() {
             let placeholder = ImageMetadata(
                 id: id,
                 projectID: request.projectID,
@@ -80,6 +84,10 @@ final class GenerationOrchestrator {
                 aspectRatio: request.aspectRatio,
                 seed: request.seed,
                 referenceIDs: request.referenceIDs,
+                runID: runID,
+                parentImageID: request.parentImageID,
+                variantIndex: slot + 1,
+                operation: operation,
                 failureReason: nil
             )
             try? metadataStore.write(placeholder)
@@ -156,11 +164,13 @@ final class GenerationOrchestrator {
         guard let provider = providers[request.model.provider] else {
             throw ImageProviderError.unsupportedOperation("No provider for \(request.model.provider)")
         }
-        guard let apiKey = keychain.apiKey(for: request.model.provider), !apiKey.isEmpty else {
-            throw ImageProviderError.unsupportedOperation("Missing API key for \(request.model.provider.displayName)")
+        let apiKey = keychain.apiKey(for: request.model.provider) ?? ""
+        if request.model.provider.usesAPIKey && apiKey.isEmpty {
+            throw ImageProviderError.unsupportedOperation("Missing credentials for \(request.model.provider.displayName)")
         }
 
         let id = UUID().uuidString.lowercased()
+        let runID = UUID().uuidString.lowercased()
         let now = Date()
         let placeholder = ImageMetadata(
             id: id,
@@ -175,6 +185,10 @@ final class GenerationOrchestrator {
             aspectRatio: nil,
             seed: nil,
             referenceIDs: [request.sourceImageID],
+            runID: runID,
+            parentImageID: request.sourceImageID,
+            variantIndex: 1,
+            operation: .inpaint,
             failureReason: nil
         )
         try? metadataStore.write(placeholder)

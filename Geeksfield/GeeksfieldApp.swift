@@ -46,18 +46,7 @@ private struct RootView: View {
             } else {
                 OnboardingView()
             }
-
-            if let asset = appState.presentedAsset {
-                ImageDetailModal(asset: asset)
-                    .environment(appState)
-                    .transition(.asymmetric(
-                        insertion: .opacity.animation(.easeOut(duration: 0.22)),
-                        removal: .opacity.animation(.easeIn(duration: 0.15))
-                    ))
-                    .zIndex(10)
-            }
         }
-        .animation(.smooth(duration: 0.22), value: appState.presentedAsset?.id)
         .alert(
             appState.errorBus.latest?.title ?? appState.l10n.error,
             isPresented: errorBinding
@@ -77,16 +66,60 @@ private struct RootView: View {
 }
 
 private struct MainSplitView: View {
-    @Environment(AppState.self) private var appState
+    @AppStorage("geeksfield.chatPanel.visible") private var showsChatPanel = true
 
     var body: some View {
         NavigationSplitView {
             SidebarView()
-        } content: {
-            GalleryView()
         } detail: {
-            ChatSidebarView()
+            MainWorkspaceView(showsChatPanel: $showsChatPanel)
         }
-        .toolbar(appState.presentedAsset == nil ? .visible : .hidden, for: .windowToolbar)
+        .toolbar(.visible, for: .windowToolbar)
+    }
+}
+
+private struct MainWorkspaceView: View {
+    @Environment(AppState.self) private var appState
+    @Binding var showsChatPanel: Bool
+
+    private let chatPanelWidth = CGFloat(320)
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            HStack(spacing: 0) {
+                GalleryView()
+                    .frame(minWidth: 480, maxWidth: .infinity)
+
+                if showsChatPanel {
+                    Divider().opacity(0.5)
+                    ChatSidebarView()
+                        .frame(width: chatPanelWidth)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+
+            chatHandle
+                .padding(.trailing, showsChatPanel ? chatPanelWidth - 17 : 10)
+                .zIndex(2)
+        }
+        .animation(.smooth(duration: 0.2), value: showsChatPanel)
+    }
+
+    private var chatHandle: some View {
+        Button {
+            showsChatPanel.toggle()
+        } label: {
+            Image(systemName: showsChatPanel ? "chevron.right" : "bubble.left.and.text.bubble.right")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 34, height: 58)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .background(.regularMaterial, in: Capsule())
+        .overlay {
+            Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
+        .help(showsChatPanel ? appState.l10n.hideChatPanel : appState.l10n.showChatPanel)
     }
 }

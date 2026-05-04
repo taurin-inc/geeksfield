@@ -122,7 +122,7 @@ struct InpaintSheet: View {
               let nsImage = NSImage(contentsOf: fileURL) else { return }
         let imageSize = nsImage.nativePixelSize
         let imageFrame = InpaintMaskEncoder.fittedImageFrame(imageSize: imageSize, containerSize: canvasSize)
-        let style: MaskStyle = (model.provider == .openai) ? .openAITransparent : .whiteOnBlack
+        let style: MaskStyle = .whiteOnBlack
 
         guard let mask = InpaintMaskEncoder.encode(
             strokes: editor.strokes,

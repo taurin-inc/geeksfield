@@ -6,26 +6,10 @@ struct ChatSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
             messageList
             inputBar
         }
-        .ignoresSafeArea(.container, edges: .top)
         .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 420)
-    }
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            ChatModelSelector()
-            Spacer()
-            if appState.isChatBusy {
-                ProgressView().controlSize(.small)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .glassEffect(.regular)
     }
 
     private var messageList: some View {
@@ -36,7 +20,7 @@ struct ChatSidebarView: View {
                         ContentUnavailableView(
                             appState.l10n.startConversation,
                             systemImage: "bubble.left.and.text.bubble.right",
-                            description: Text(appState.l10n.chooseModelThenMessage)
+                            description: Text(appState.l10n.chatUsesCodex)
                         )
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
@@ -69,8 +53,14 @@ struct ChatSidebarView: View {
             Button {
                 submit()
             } label: {
-                Image(systemName: "arrow.up")
-                    .font(.body.weight(.semibold))
+                if appState.isChatBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: "arrow.up")
+                        .font(.body.weight(.semibold))
+                }
             }
             .buttonStyle(.glassProminent)
             .disabled(!canSubmit)
@@ -83,17 +73,15 @@ struct ChatSidebarView: View {
 
     private var canSubmit: Bool {
         !input.trimmingCharacters(in: .whitespaces).isEmpty
-            && appState.selectedChatModel != nil
+            && appState.defaultChatModel != nil
             && !appState.isChatBusy
     }
 
     private func submit() {
-        guard let model = appState.selectedChatModel else {
+        guard let model = appState.defaultChatModel else {
             appState.errorBus.report(
-                title: appState.l10n.chatModelRequired,
-                message: appState.modelRegistry.chatModels.isEmpty
-                    ? appState.l10n.enterKeyInSettings
-                    : appState.l10n.pickChatModelAbove
+                title: appState.l10n.codexLoginRequired,
+                message: appState.l10n.enterKeyInSettings
             )
             return
         }

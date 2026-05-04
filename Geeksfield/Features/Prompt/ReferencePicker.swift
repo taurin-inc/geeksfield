@@ -6,6 +6,7 @@ struct ReferencePicker: View {
     @Environment(AppState.self) private var appState
     @State private var popoverOpen = false
     var compact: Bool = false
+    var compactSize: CGFloat = 56
 
     var body: some View {
         Group {
@@ -38,15 +39,15 @@ struct ReferencePicker: View {
 
     private var compactLabel: some View {
         Image(systemName: "photo.badge.plus")
-            .font(.system(size: 18, weight: .medium))
+            .font(.system(size: compactSize > 48 ? 18 : 15, weight: .medium))
             .foregroundStyle(.secondary)
-            .frame(width: 56, height: 56)
+            .frame(width: compactSize, height: compactSize)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: compactSize > 48 ? 12 : 10, style: .continuous)
                     .fill(Color.white.opacity(0.06))
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: compactSize > 48 ? 12 : 10, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
             }
             .contentShape(Rectangle())

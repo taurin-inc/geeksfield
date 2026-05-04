@@ -13,7 +13,7 @@ enum ModelListerError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidKey: return "API key was rejected."
+        case .invalidKey: return "Credentials were rejected."
         case .network(let e): return "Network error: \(e.localizedDescription)"
         case .http(let code, _): return "HTTP \(code)"
         case .decode(let e): return "Decode error: \(e.localizedDescription)"

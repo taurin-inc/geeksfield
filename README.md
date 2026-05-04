@@ -1,6 +1,6 @@
 # Geeksfield
 
-로컬에서 Gemini / OpenAI API로 이미지를 생성·관리하는 macOS 네이티브 앱.
+로컬 Codex 로그인으로 이미지를 생성·관리하는 macOS 네이티브 앱.
 
 - macOS 26 Tahoe 이상 (Liquid Glass UI)
 - Swift 6, SwiftUI, Xcode 26+
@@ -19,7 +19,11 @@ open Geeksfield.xcodeproj
 
 ## 상태
 
-1단계 ~ 3단계 스캐폴딩 완료. 앱을 실행하면 온보딩에서 API 키를 입력받고, `/models` 엔드포인트로 유효성을 검증한 뒤 사용 가능한 모델이 드롭다운에 표시됩니다.
+1단계 ~ 3단계 스캐폴딩 완료. 앱을 실행하면 온보딩에서 Codex 로그인을 확인한 뒤 사용 가능한 모델이 드롭다운에 표시됩니다.
+
+## 모델 연결
+
+- Codex: 터미널에서 `codex login`으로 로그인하면 앱이 로컬 `~/.codex/auth.json`을 확인해 Codex 이미지 생성을 사용할 수 있습니다.
 
 이후 단계:
 

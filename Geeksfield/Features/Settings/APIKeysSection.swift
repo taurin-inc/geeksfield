@@ -14,139 +14,162 @@ final class ProviderKeyFieldState {
     var validation: ProviderKeyValidation = .idle
 }
 
-/// Single-key entry row. The text field is always empty so that typing never
-/// concatenates with the previously-saved key. The currently-stored key is
-/// confirmed visually via its last 4 characters.
-struct ProviderKeyRow: View {
-    let provider: Provider
-
+struct CodexLoginRow: View {
     @Environment(AppState.self) private var appState
-    @State private var field = ProviderKeyFieldState()
+    @State private var validation: ProviderKeyValidation = .idle
+
+    private let authStore = CodexAuthStore()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-            inputRow
-            statusLine
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
-    }
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    SettingsIconTile(systemName: "terminal")
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: iconName)
-                .font(.headline)
-                .foregroundStyle(.tint)
-                .frame(width: 18, alignment: .leading)
-            Text(provider.displayName)
-                .font(.headline)
-            Spacer()
-            Link(destination: provider.apiKeyURL) {
-                Label(appState.l10n.getKey, systemImage: "arrow.up.forward.square")
-                    .labelStyle(.titleAndIcon)
-                    .font(.callout)
-            }
-            .buttonStyle(.link)
-        }
-    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(Provider.codex.displayName)
+                            .font(.headline)
+                        Text(appState.l10n.codexUsesSubscription)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
 
-    private var inputRow: some View {
-        let l10n = appState.l10n
-        return HStack(alignment: .center, spacing: 8) {
-            SecureField(savedKeyExists ? l10n.enterToReplace : "API Key", text: $field.draft)
-                .textFieldStyle(.roundedBorder)
+                    Spacer(minLength: 12)
+                    statusBadge
+                }
 
-            Button {
-                Task { await saveAndValidate() }
-            } label: {
-                if field.validation == .validating {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text(savedKeyExists ? l10n.replaceAndVerify : l10n.saveAndVerify)
+                if !isConnected {
+                    if let message = statusMessage {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(statusMessageColor)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    HStack(spacing: 8) {
+                        Link(destination: Provider.codex.apiKeyURL) {
+                            Label("Codex CLI", systemImage: "arrow.up.forward.square")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Spacer(minLength: 0)
+
+                        Button {
+                            Task { await checkLogin() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if validation == .validating {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Text(appState.l10n.checkCodexLogin)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(validation == .validating)
+                    }
                 }
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(field.draft.trimmingCharacters(in: .whitespaces).isEmpty || field.validation == .validating)
-            .frame(minWidth: 110)
-
-            if savedKeyExists {
-                Button(role: .destructive) {
-                    try? appState.keychain.deleteAPIKey(for: provider)
-                    field.draft = ""
-                    field.validation = .idle
-                    Task { await appState.modelRegistry.refresh() }
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.bordered)
-                .help(l10n.deleteSavedKey)
+        }
+        .task {
+            if authStore.isSignedIn() {
+                validation = .valid(modelCount: 1)
             }
         }
     }
 
-    private var iconName: String {
-        switch provider {
-        case .openai: return "circle.hexagongrid"
-        case .gemini: return "diamond"
+    private var isConnected: Bool {
+        switch validation {
+        case .idle:
+            return authStore.isSignedIn()
+        case .valid:
+            return true
+        case .validating, .invalid:
+            return false
         }
     }
 
-    private var savedKeyExists: Bool {
-        appState.keychain.apiKey(for: provider) != nil
-    }
-
-    private var savedKeyHint: String? {
-        guard let key = appState.keychain.apiKey(for: provider), key.count >= 4 else { return nil }
-        return "····" + String(key.suffix(4))
-    }
-
-    @ViewBuilder
-    private var statusLine: some View {
-        let l10n = appState.l10n
-        HStack(spacing: 6) {
-            switch field.validation {
-            case .idle:
-                if let hint = savedKeyHint {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                    Text(l10n.saved).foregroundStyle(.secondary)
-                    Text(hint).monospaced().foregroundStyle(.tertiary)
-                } else {
-                    Image(systemName: "circle.dashed").foregroundStyle(.tertiary)
-                    Text(l10n.enterAndSaveKey).foregroundStyle(.secondary)
-                }
-            case .validating:
-                ProgressView().controlSize(.small)
-                Text(l10n.verifying).foregroundStyle(.secondary)
-            case .valid(let modelCount):
-                Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-                Text(l10n.validKeyModelCount(modelCount)).foregroundStyle(.secondary)
-                if let hint = savedKeyHint {
-                    Text(hint).monospaced().foregroundStyle(.tertiary)
-                }
-            case .invalid(let msg):
-                Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(.red)
-                Text(msg).foregroundStyle(.secondary).lineLimit(2)
-            }
+    private var statusBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: statusIcon)
+                .font(.caption.weight(.bold))
+            Text(statusTitle)
+                .font(.caption.weight(.semibold))
         }
-        .font(.caption)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(statusColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(statusColor.opacity(0.12)))
     }
 
-    private func saveAndValidate() async {
-        field.validation = .validating
-        let raw = field.draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lister: any ModelLister = (provider == .openai) ? OpenAIModelLister() : GeminiModelLister()
+    private var statusIcon: String {
+        switch validation {
+        case .idle:
+            return authStore.isSignedIn() ? "checkmark.circle.fill" : "circle.dashed"
+        case .validating:
+            return "arrow.triangle.2.circlepath"
+        case .valid:
+            return "checkmark.circle.fill"
+        case .invalid:
+            return "exclamationmark.circle.fill"
+        }
+    }
+
+    private var statusTitle: String {
+        switch validation {
+        case .idle:
+            return authStore.isSignedIn() ? appState.l10n.connected : appState.l10n.notConnected
+        case .validating:
+            return appState.l10n.verifying
+        case .valid:
+            return appState.l10n.connected
+        case .invalid:
+            return appState.l10n.error
+        }
+    }
+
+    private var statusColor: Color {
+        switch validation {
+        case .idle:
+            return authStore.isSignedIn() ? .green : .secondary
+        case .validating:
+            return .blue
+        case .valid:
+            return .green
+        case .invalid:
+            return .red
+        }
+    }
+
+    private var statusMessage: String? {
+        switch validation {
+        case .idle:
+            return authStore.isSignedIn() ? appState.l10n.codexLoginDetected : appState.l10n.codexLoginMissing
+        case .validating:
+            return nil
+        case .valid:
+            return appState.l10n.codexLoginDetected
+        case .invalid(let msg):
+            return msg
+        }
+    }
+
+    private var statusMessageColor: Color {
+        if case .invalid = validation {
+            return .red.opacity(0.9)
+        }
+        return .secondary
+    }
+
+    private func checkLogin() async {
+        validation = .validating
         do {
-            let ids = try await lister.listAvailableModelIDs(apiKey: raw)
-            try appState.keychain.setAPIKey(raw, for: provider)
+            _ = try authStore.load()
             await appState.modelRegistry.refresh()
-            field.validation = .valid(modelCount: ids.count)
-            field.draft = ""
+            validation = .valid(modelCount: 1)
         } catch {
-            let msg = (error as? LocalizedError)?.errorDescription ?? appState.l10n.verificationFailed
-            field.validation = .invalid(msg)
+            let msg = (error as? LocalizedError)?.errorDescription ?? appState.l10n.codexLoginMissing
+            validation = .invalid(msg)
         }
     }
 }
