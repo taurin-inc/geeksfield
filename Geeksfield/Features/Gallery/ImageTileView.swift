@@ -12,6 +12,7 @@ struct ImageTileView: View {
                 .clipped()
 
             statusOverlay
+            baseImageOverlay
             variantOverlay
             hoverOverlay
         }
@@ -38,6 +39,25 @@ struct ImageTileView: View {
             }
             .padding(8)
             .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder
+    private var baseImageOverlay: some View {
+        if asset.id == appState.activeBaseImageID {
+            VStack {
+                HStack {
+                    Label(appState.l10n.baseImage, systemImage: "target")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.accentColor))
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(8)
         }
     }
 

@@ -58,9 +58,6 @@ struct GalleryView: View {
     private var toolbar: some View {
         HStack(alignment: .center, spacing: 12) {
             StatusTabs(filter: $filter)
-            Text(appState.l10n.iterationBoard)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
             Spacer()
             GridDensityControl(columns: $columns)
         }

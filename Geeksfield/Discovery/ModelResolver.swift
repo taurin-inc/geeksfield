@@ -20,11 +20,16 @@ final class ModelResolver: @unchecked Sendable {
 
         for (provider, ids) in providerModels {
             for id in ids {
+                var matched = false
                 if let entry = matchImageEntry(provider: provider, id: id) {
                     image.append(makeImageDescriptor(id: id, entry: entry))
-                } else if let entry = matchChatEntry(provider: provider, id: id) {
+                    matched = true
+                }
+                if let entry = matchChatEntry(provider: provider, id: id) {
                     chat.append(makeChatDescriptor(id: id, entry: entry))
-                } else {
+                    matched = true
+                }
+                if !matched {
                     unknown.append((provider, id))
                 }
             }

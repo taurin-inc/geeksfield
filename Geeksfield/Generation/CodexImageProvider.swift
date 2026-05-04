@@ -186,7 +186,7 @@ struct CodexImageProvider: ImageProvider {
             if let message = Self.findErrorMessage(in: object) {
                 throw ImageProviderError.unsupportedOperation(message)
             }
-            if let base64 = Self.findImageBase64(in: object),
+            if let base64 = Self.findFinalImageBase64(in: object),
                let image = Data(base64Encoded: base64) {
                 return (image, summary)
             }
@@ -230,7 +230,7 @@ struct CodexImageProvider: ImageProvider {
         return objects
     }
 
-    private static func findImageBase64(in value: Any) -> String? {
+    private static func findFinalImageBase64(in value: Any) -> String? {
         if let dict = value as? [String: Any] {
             let type = dict["type"] as? String
             if type == "image_generation_call",
@@ -241,17 +241,14 @@ struct CodexImageProvider: ImageProvider {
                let result = dict["result"] as? String {
                 return result
             }
-            if let partial = dict["partial_image_b64"] as? String {
-                return partial
-            }
             for child in dict.values {
-                if let found = findImageBase64(in: child) {
+                if let found = findFinalImageBase64(in: child) {
                     return found
                 }
             }
         } else if let array = value as? [Any] {
             for child in array {
-                if let found = findImageBase64(in: child) {
+                if let found = findFinalImageBase64(in: child) {
                     return found
                 }
             }

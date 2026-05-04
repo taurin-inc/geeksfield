@@ -46,7 +46,9 @@ struct L10n: Sendable, Equatable {
 
     // MARK: Sidebar
     var projects: String { t("프로젝트", "Projects") }
+    var defaultProjectName: String { t("내 프로젝트", "My Project") }
     var newProject: String { t("새 프로젝트", "New Project") }
+    var renameProject: String { t("이름 변경", "Rename") }
     var exportProject: String { t("프로젝트 내보내기", "Export Project") }
     var noProjects: String { t("프로젝트 없음", "No Projects") }
     var startWithPlus: String { t("툴바의 + 버튼으로 시작하세요", "Start with the + button in the toolbar") }
@@ -95,11 +97,11 @@ struct L10n: Sendable, Equatable {
     var noAvailableModels: String { t("사용 가능한 모델 없음", "No available models") }
     var chatModel: String { t("채팅 모델", "Chat Model") }
     var codexChat: String { t("Codex 채팅", "Codex Chat") }
-    var chatUsesCodex: String { t("Codex 로그인으로 바로 대화할 수 있습니다.", "Chat uses your Codex login automatically.") }
+    var chatUsesCodex: String { t("프롬프트를 다듬거나 다음 이미지를 함께 구상하세요.", "Refine prompts or shape the next image together.") }
     var codexLoginRequired: String { t("Codex 로그인 필요", "Codex login required") }
     var showChatPanel: String { t("대화 패널 보이기", "Show chat panel") }
     var hideChatPanel: String { t("대화 패널 숨기기", "Hide chat panel") }
-    var startConversation: String { t("대화를 시작하세요", "Start a conversation") }
+    var startConversation: String { t("무엇을 만들지 함께 정리해보세요", "Shape what to create next") }
     var chooseModelThenMessage: String { t("메시지를 입력하세요.", "Enter a message.") }
     var message: String { t("메시지", "Message") }
     var chatModelRequired: String { t("채팅 모델 필요", "Chat model required") }
@@ -126,6 +128,7 @@ struct L10n: Sendable, Equatable {
     var baseImage: String { t("기준 이미지", "Base Image") }
     var continueFromHere: String { t("이 이미지로 이어가기", "Continue From Here") }
     var currentImage: String { t("현재 이미지", "Current Image") }
+    var selectedImage: String { t("선택한 이미지", "Selected Image") }
     var sameRun: String { t("같은 시안", "Same Run") }
     var parentImage: String { t("부모 이미지", "Parent Image") }
     var childImages: String { t("파생 이미지", "Child Images") }

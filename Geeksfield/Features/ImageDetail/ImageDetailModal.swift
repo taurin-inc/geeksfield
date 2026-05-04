@@ -68,7 +68,7 @@ struct ImageThreadWorkspaceView: View {
             iconButton("xmark", help: l10n.close, action: dismiss)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(l10n.iterationThread)
+                Text(l10n.selectedImage)
                     .font(.headline)
                 Text(currentSubtitle)
                     .font(.caption)
@@ -78,20 +78,21 @@ struct ImageThreadWorkspaceView: View {
 
             Spacer(minLength: 12)
 
-            Button {
-                appState.setBaseImage(currentAsset)
-            } label: {
-                Label(l10n.continueFromHere, systemImage: "target")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(Color.black)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(Color.white))
-            }
-            .buttonStyle(.plain)
-            .disabled(!currentAsset.hasFile)
-            .opacity(currentAsset.hasFile ? 1 : 0.5)
+            Label(l10n.iterationThread, systemImage: "point.3.connected.trianglepath.dotted")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
 
+            Divider()
+                .frame(height: 24)
+                .opacity(0.5)
+
+            iconButton("target", help: l10n.continueFromHere) {
+                appState.setBaseImage(currentAsset)
+            }
+            .disabled(!currentAsset.hasFile)
             iconButton("wand.and.sparkles", help: l10n.edit) {
                 if currentAsset.hasFile { inpaintOpen = true }
             }
@@ -435,6 +436,22 @@ private struct IterationThreadAssetCard: View {
         ZStack(alignment: .topTrailing) {
             assetImage
                 .frame(width: cardWidth, height: cardHeight)
+
+            if asset.id == appState.activeBaseImageID {
+                VStack {
+                    HStack {
+                        Label(appState.l10n.baseImage, systemImage: "target")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(Color.black)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.accentColor))
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(8)
+            }
 
             if hovered || isCurrent {
                 quickActions

@@ -27,11 +27,20 @@ final class ProjectStore: @unchecked Sendable {
             guard let project = try? readProject(from: jsonURL) else { continue }
             results.append(project)
         }
+        if results.contains(where: { $0.sortIndex != nil }) {
+            return results.sorted {
+                let left = $0.sortIndex ?? Int.max
+                let right = $1.sortIndex ?? Int.max
+                if left != right { return left < right }
+                return $0.createdAt < $1.createdAt
+            }
+        }
         return results.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     func createProject(name: String) throws -> Project {
-        let project = Project.makeNew(name: name)
+        let nextIndex = ((try? listProjects().compactMap(\.sortIndex).max()) ?? -1) + 1
+        let project = Project.makeNew(name: name, sortIndex: nextIndex)
         try paths.ensureProjectSkeleton(project.id)
         try writeProject(project)
         return project
@@ -43,6 +52,14 @@ final class ProjectStore: @unchecked Sendable {
         project.updatedAt = Date()
         try writeProject(project)
         return project
+    }
+
+    func reorderProjects(ids: [String]) throws {
+        for (index, id) in ids.enumerated() {
+            var project = try readProject(from: paths.projectJSON(id))
+            project.sortIndex = index
+            try writeProject(project)
+        }
     }
 
     func deleteProject(id: String) throws {

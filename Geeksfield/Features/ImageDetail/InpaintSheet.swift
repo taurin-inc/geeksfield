@@ -30,10 +30,21 @@ struct InpaintSheet: View {
         return HStack(spacing: 12) {
             Text(l10n.inpaint).font(.headline)
             Spacer()
+            Picker("", selection: $editor.tool) {
+                Image(systemName: "paintbrush").tag(InpaintTool.brush)
+                Image(systemName: "eraser").tag(InpaintTool.eraser)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 92)
             Text(l10n.brush).font(.caption).foregroundStyle(.secondary)
             Slider(value: $editor.brushSize, in: 8...120)
                 .frame(width: 180)
             Text("\(Int(editor.brushSize))px").monospacedDigit().font(.caption)
+            Text("Zoom").font(.caption).foregroundStyle(.secondary)
+            Slider(value: $editor.zoom, in: 1...4)
+                .frame(width: 120)
+            Text("\(Int(editor.zoom * 100))%").monospacedDigit().font(.caption)
+                .frame(width: 44, alignment: .trailing)
 
             Button { editor.undo() } label: { Image(systemName: "arrow.uturn.backward") }
                 .disabled(!editor.canUndo)
@@ -49,10 +60,17 @@ struct InpaintSheet: View {
     private var canvasArea: some View {
         GeometryReader { geo in
             if let url = asset.fileURL {
-                InpaintCanvas(imageURL: url, state: editor)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onAppear { canvasSize = geo.size }
-                    .onChange(of: geo.size) { _, new in canvasSize = new }
+                let size = CGSize(
+                    width: max(geo.size.width, geo.size.width * editor.zoom),
+                    height: max(geo.size.height, geo.size.height * editor.zoom)
+                )
+                ScrollView([.horizontal, .vertical]) {
+                    InpaintCanvas(imageURL: url, state: editor)
+                        .frame(width: size.width, height: size.height)
+                }
+                .onAppear { canvasSize = size }
+                .onChange(of: geo.size) { _, _ in canvasSize = size }
+                .onChange(of: editor.zoom) { _, _ in canvasSize = size }
             } else {
                 ContentUnavailableView(appState.l10n.originalImageNotFound, systemImage: "photo.badge.exclamationmark")
             }

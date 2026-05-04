@@ -1,10 +1,15 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Environment(AppState.self) private var appState
     @State private var showingSettings = false
     @State private var newProjectSheet = false
     @State private var newProjectName = ""
+    @State private var renamingProject: Project?
+    @State private var renameProjectName = ""
+    @State private var draggingProjectID: String?
+    @State private var dropIndex: Int?
 
     var body: some View {
         let l10n = appState.l10n
@@ -36,14 +41,35 @@ struct SidebarView: View {
             newProjectForm
                 .environment(appState)
         }
+        .sheet(item: $renamingProject) { project in
+            renameProjectForm(project)
+                .environment(appState)
+        }
     }
 
     private var projectList: some View {
         ScrollView {
-            LazyVStack(spacing: 2) {
-                ForEach(appState.projects) { project in
+            LazyVStack(spacing: 0) {
+                ForEach(Array(appState.projects.enumerated()), id: \.element.id) { index, project in
+                    insertionLine(visible: dropIndex == index)
                     projectRow(project)
+                        .opacity(draggingProjectID == project.id ? 0.45 : 1)
+                        .onDrag {
+                            draggingProjectID = project.id
+                            return NSItemProvider(object: project.id as NSString)
+                        }
+                        .onDrop(
+                            of: [UTType.plainText],
+                            delegate: ProjectRowDropDelegate(
+                                index: index,
+                                projectID: project.id,
+                                draggingProjectID: $draggingProjectID,
+                                dropIndex: $dropIndex,
+                                appState: appState
+                            )
+                        )
                 }
+                insertionLine(visible: dropIndex == appState.projects.count)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
@@ -71,11 +97,23 @@ struct SidebarView: View {
                 .fill(isSelected ? Color.white.opacity(0.14) : Color.clear)
         )
         .contextMenu {
+            Button(appState.l10n.renameProject) {
+                renamingProject = project
+                renameProjectName = project.name
+            }
             Button(appState.l10n.exportProject) {
                 appState.selectedProjectID = project.id
                 appState.exportSelectedProject()
             }
         }
+    }
+
+    private func insertionLine(visible: Bool) -> some View {
+        Capsule()
+            .fill(visible ? Color.accentColor : Color.clear)
+            .frame(height: 2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 1)
     }
 
     private var emptyState: some View {
@@ -153,5 +191,79 @@ struct SidebarView: View {
         }
         .padding(24)
         .frame(width: 380)
+    }
+
+    private func renameProjectForm(_ project: Project) -> some View {
+        let l10n = appState.l10n
+        return VStack(alignment: .leading, spacing: 16) {
+            Text(l10n.renameProject).font(.title2).fontWeight(.semibold)
+            TextField(l10n.name, text: $renameProjectName)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button(l10n.cancel) { renamingProject = nil }
+                    .buttonStyle(.glass)
+                Button(l10n.done) {
+                    appState.renameProject(project, to: renameProjectName)
+                    renamingProject = nil
+                }
+                .buttonStyle(.glassProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(renameProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 380)
+    }
+}
+
+private struct ProjectRowDropDelegate: DropDelegate {
+    let index: Int
+    let projectID: String
+    @Binding var draggingProjectID: String?
+    @Binding var dropIndex: Int?
+    let appState: AppState
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        updateDropIndex(info: info)
+        return DropProposal(operation: .move)
+    }
+
+    func dropEntered(info: DropInfo) {
+        updateDropIndex(info: info)
+    }
+
+    func dropExited(info: DropInfo) {
+        dropIndex = nil
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer {
+            draggingProjectID = nil
+            dropIndex = nil
+        }
+        guard draggingProjectID != nil else {
+            return false
+        }
+        appState.persistCurrentProjectOrder()
+        return true
+    }
+
+    private func updateDropIndex(info: DropInfo) {
+        guard let sourceID = draggingProjectID, sourceID != projectID else {
+            dropIndex = nil
+            return
+        }
+        guard let insertion = insertionIndex(info: info) else {
+            dropIndex = nil
+            return
+        }
+        dropIndex = insertion
+        appState.previewMoveProject(id: sourceID, toInsertionIndex: insertion)
+    }
+
+    private func insertionIndex(info: DropInfo) -> Int? {
+        guard draggingProjectID != projectID else { return nil }
+        return info.location.y < 28 ? index : index + 1
     }
 }

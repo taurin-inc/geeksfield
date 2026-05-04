@@ -12,5 +12,13 @@
       "supports_reference": true
     }
   ],
-  "chat_models": []
+  "chat_models": [
+    {
+      "provider": "codex",
+      "id_patterns": ["gpt-5.4"],
+      "display_name_template": "Codex ({id})",
+      "supports_vision": true,
+      "context_window": 256000
+    }
+  ]
 }

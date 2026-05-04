@@ -62,7 +62,8 @@ final class GenerationOrchestrator {
 
         // Placeholder metadata up front so tiles appear immediately. Status is
         // .pending so the UI knows to render a spinner and *not* a failure tile.
-        let slotIDs: [String] = (0..<request.batchSize).map { _ in
+        let batchSize = max(1, request.batchSize)
+        let slotIDs: [String] = (0..<batchSize).map { _ in
             UUID().uuidString.lowercased()
         }
         let runID = UUID().uuidString.lowercased()
@@ -90,7 +91,7 @@ final class GenerationOrchestrator {
                 operation: operation,
                 failureReason: nil
             )
-            try? metadataStore.write(placeholder)
+            try metadataStore.write(placeholder)
         }
         onUpdate()
 
@@ -169,7 +170,7 @@ final class GenerationOrchestrator {
             throw ImageProviderError.unsupportedOperation("Missing credentials for \(request.model.provider.displayName)")
         }
 
-        let id = UUID().uuidString.lowercased()
+        let id = request.outputImageID
         let runID = UUID().uuidString.lowercased()
         let now = Date()
         let placeholder = ImageMetadata(
@@ -191,7 +192,7 @@ final class GenerationOrchestrator {
             operation: .inpaint,
             failureReason: nil
         )
-        try? metadataStore.write(placeholder)
+        try metadataStore.write(placeholder)
         onUpdate()
 
         do {

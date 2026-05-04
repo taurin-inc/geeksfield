@@ -55,10 +55,12 @@ enum InpaintMaskEncoder {
             // Draw strokes as fully transparent.
             ctx.setBlendMode(.copy)
             ctx.setStrokeColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0))
+            ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0))
         case .whiteOnBlack:
             ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
             ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
             ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
         }
 
         ctx.setLineCap(.round)
@@ -71,6 +73,17 @@ enum InpaintMaskEncoder {
 
         for stroke in strokes {
             guard let first = stroke.points.first else { continue }
+            let isErasing = stroke.isErasing
+            switch style {
+            case .openAITransparent:
+                let alpha = isErasing ? CGFloat(1) : CGFloat(0)
+                ctx.setStrokeColor(CGColor(red: 0, green: 0, blue: 0, alpha: alpha))
+                ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: alpha))
+            case .whiteOnBlack:
+                let value = isErasing ? CGFloat(0) : CGFloat(1)
+                ctx.setStrokeColor(CGColor(red: value, green: value, blue: value, alpha: 1))
+                ctx.setFillColor(CGColor(red: value, green: value, blue: value, alpha: 1))
+            }
             ctx.setLineWidth(stroke.brushSize * brushScale)
             let mapped = stroke.points.map { p -> CGPoint in
                 let localX = p.x - imageFrame.minX
@@ -84,6 +97,16 @@ enum InpaintMaskEncoder {
             ctx.beginPath()
             ctx.move(to: mapped[0])
             _ = first
+            if mapped.count == 1 {
+                let radius = (stroke.brushSize * brushScale) / 2
+                ctx.fillEllipse(in: CGRect(
+                    x: mapped[0].x - radius,
+                    y: mapped[0].y - radius,
+                    width: radius * 2,
+                    height: radius * 2
+                ))
+                continue
+            }
             for p in mapped.dropFirst() {
                 ctx.addLine(to: p)
             }

@@ -4,6 +4,14 @@ import Observation
 struct InpaintStroke: Hashable, Sendable {
     var points: [CGPoint]
     var brushSize: CGFloat
+    var isErasing: Bool = false
+}
+
+enum InpaintTool: String, CaseIterable, Identifiable, Sendable {
+    case brush
+    case eraser
+
+    var id: Self { self }
 }
 
 @Observable
@@ -12,6 +20,7 @@ final class InpaintEditorState {
     var strokes: [InpaintStroke] = []
     var redoStack: [InpaintStroke] = []
     var brushSize: CGFloat = 40
+    var tool: InpaintTool = .brush
     var prompt: String = ""
     var zoom: CGFloat = 1.0
     var isSubmitting: Bool = false
@@ -21,7 +30,7 @@ final class InpaintEditorState {
     var hasMask: Bool { !strokes.isEmpty }
 
     func beginStroke(at p: CGPoint) {
-        strokes.append(InpaintStroke(points: [p], brushSize: brushSize))
+        strokes.append(InpaintStroke(points: [p], brushSize: brushSize, isErasing: tool == .eraser))
         redoStack.removeAll()
     }
 
@@ -65,6 +74,21 @@ struct InpaintCanvas: View {
                 Canvas { ctx, _ in
                     for stroke in state.strokes {
                         guard let first = stroke.points.first else { continue }
+                        ctx.blendMode = stroke.isErasing ? .destinationOut : .normal
+                        let color = Color.red.opacity(0.5)
+                        if stroke.points.count == 1 {
+                            let radius = stroke.brushSize / 2
+                            ctx.fill(
+                                Path(ellipseIn: CGRect(
+                                    x: first.x - radius,
+                                    y: first.y - radius,
+                                    width: radius * 2,
+                                    height: radius * 2
+                                )),
+                                with: .color(color)
+                            )
+                            continue
+                        }
                         var path = Path()
                         path.move(to: first)
                         for point in stroke.points.dropFirst() {
@@ -72,7 +96,7 @@ struct InpaintCanvas: View {
                         }
                         ctx.stroke(
                             path,
-                            with: .color(.red.opacity(0.5)),
+                            with: .color(color),
                             style: StrokeStyle(
                                 lineWidth: stroke.brushSize,
                                 lineCap: .round,

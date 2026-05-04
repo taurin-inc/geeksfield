@@ -168,6 +168,10 @@ final class AppState {
     func reloadProjects(recoverInterruptedPending: Bool = true) {
         do {
             projects = try projectStore.listProjects()
+            if projects.isEmpty {
+                let project = try projectStore.createProject(name: l10n.defaultProjectName)
+                projects = [project]
+            }
             for p in projects {
                 refreshAssets(for: p.id, recoverInterruptedPending: recoverInterruptedPending)
             }
@@ -192,6 +196,74 @@ final class AppState {
             refreshAssets(for: project.id)
         } catch {
             errorBus.report(error, title: "Failed to create project")
+        }
+    }
+
+    func renameProject(_ project: Project, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        do {
+            let updated = try projectStore.renameProject(id: project.id, to: trimmed)
+            if let index = projects.firstIndex(where: { $0.id == project.id }) {
+                projects[index] = updated
+            }
+        } catch {
+            errorBus.report(error, title: "Failed to rename project")
+        }
+    }
+
+    func moveProjects(from source: IndexSet, to destination: Int) {
+        guard !source.isEmpty else { return }
+        var reordered = projects
+        reordered.move(fromOffsets: source, toOffset: destination)
+        projects = reordered
+        persistProjectOrder(reordered.map(\.id))
+    }
+
+    func moveProject(id: String, relativeTo targetID: String, after: Bool) {
+        guard id != targetID,
+              let source = projects.firstIndex(where: { $0.id == id }),
+              let target = projects.firstIndex(where: { $0.id == targetID }) else { return }
+        var reordered = projects
+        let moved = reordered.remove(at: source)
+        let adjustedTarget = source < target ? target - 1 : target
+        let insertion = after ? adjustedTarget + 1 : adjustedTarget
+        reordered.insert(moved, at: min(max(0, insertion), reordered.count))
+        projects = reordered
+        persistProjectOrder(reordered.map(\.id))
+    }
+
+    func moveProject(id: String, toInsertionIndex insertionIndex: Int) {
+        previewMoveProject(id: id, toInsertionIndex: insertionIndex)
+        persistProjectOrder(projects.map(\.id))
+    }
+
+    func previewMoveProject(id: String, toInsertionIndex insertionIndex: Int) {
+        guard let source = projects.firstIndex(where: { $0.id == id }) else { return }
+        var reordered = projects
+        let moved = reordered.remove(at: source)
+        let adjustedIndex = source < insertionIndex ? insertionIndex - 1 : insertionIndex
+        let boundedIndex = min(max(0, adjustedIndex), reordered.count)
+        guard boundedIndex != source else { return }
+        reordered.insert(moved, at: boundedIndex)
+        projects = reordered
+    }
+
+    func persistCurrentProjectOrder() {
+        persistProjectOrder(projects.map(\.id))
+    }
+
+    private func persistProjectOrder(_ ids: [String]) {
+        let store = projectStore
+        Task {
+            do {
+                try await Task.detached {
+                    try store.reorderProjects(ids: ids)
+                }.value
+            } catch {
+                errorBus.report(error, title: "Failed to reorder projects")
+                reloadProjects(recoverInterruptedPending: false)
+            }
         }
     }
 
@@ -291,7 +363,9 @@ final class AppState {
     // MARK: - References
 
     func attachReference(imageID: String) {
-        if !pendingReferenceIDs.contains(imageID) {
+        if pendingReferenceIDs.contains(imageID) {
+            removeReference(id: imageID)
+        } else {
             pendingReferenceIDs.append(imageID)
         }
     }
@@ -424,15 +498,18 @@ final class AppState {
             return
         }
         let pid = asset.metadata.projectID
+        let outputID = UUID().uuidString.lowercased()
         let request = InpaintRequest(
             projectID: pid,
             sourceImageID: asset.id,
+            outputImageID: outputID,
             maskPNGData: maskPNG,
             prompt: prompt,
             model: model,
             size: asset.metadata.size
         )
         Task {
+            var selectedPending = false
             do {
                 try await generationOrchestrator.executeInpaint(
                     request: request,
@@ -440,6 +517,11 @@ final class AppState {
                     maskPNG: maskPNG
                 ) { [weak self] in
                     self?.refreshAssets(for: pid)
+                    if !selectedPending,
+                       let created = self?.asset(withID: outputID, in: pid) {
+                        self?.presentedAsset = created
+                        selectedPending = true
+                    }
                 }
             } catch {
                 errorBus.report(error, title: l10n.inpaintFailed)
