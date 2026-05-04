@@ -312,15 +312,6 @@ struct ImageDetailInfo: View {
                     .strokeBorder(asset.id == self.asset.id ? Color.accentColor : Color.white.opacity(0.10), lineWidth: 1)
             }
 
-            if let index = asset.metadata.variantIndex {
-                Text("#\(index)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.black.opacity(0.6)))
-                    .padding(5)
-            }
         }
     }
 

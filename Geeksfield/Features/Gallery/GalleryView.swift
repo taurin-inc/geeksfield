@@ -5,6 +5,7 @@ struct GalleryView: View {
     @State private var filter: GalleryFilter = .all
     @State private var columns: Int = 4
     @State private var failedAsset: ImageAsset?
+    @State private var activeThreadRootID: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,6 +21,13 @@ struct GalleryView: View {
         }
         .navigationSplitViewColumnWidth(min: 480, ideal: 720)
         .failedImageAlert(asset: $failedAsset)
+        .onChange(of: appState.presentedAsset?.id) { _, presentedID in
+            if presentedID == nil {
+                activeThreadRootID = nil
+            } else if activeThreadRootID == nil {
+                activeThreadRootID = presentedID
+            }
+        }
     }
 
     @ViewBuilder
@@ -52,7 +60,8 @@ struct GalleryView: View {
               asset.metadata.projectID == selectedProjectID else {
             return nil
         }
-        return appState.asset(withID: asset.id, in: selectedProjectID) ?? asset
+        let rootID = activeThreadRootID ?? asset.id
+        return appState.asset(withID: rootID, in: selectedProjectID) ?? asset
     }
 
     private var toolbar: some View {
@@ -90,6 +99,7 @@ struct GalleryView: View {
         if asset.status == .failed {
             failedAsset = asset
         } else {
+            activeThreadRootID = asset.id
             appState.presentedAsset = asset
         }
     }

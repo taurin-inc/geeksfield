@@ -129,6 +129,7 @@ struct L10n: Sendable, Equatable {
     var continueFromHere: String { t("이 이미지로 이어가기", "Continue From Here") }
     var currentImage: String { t("현재 이미지", "Current Image") }
     var selectedImage: String { t("선택한 이미지", "Selected Image") }
+    var workTree: String { t("작업 트리", "Work Tree") }
     var sameRun: String { t("같은 시안", "Same Run") }
     var parentImage: String { t("부모 이미지", "Parent Image") }
     var childImages: String { t("파생 이미지", "Child Images") }

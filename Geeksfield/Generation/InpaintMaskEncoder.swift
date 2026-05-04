@@ -16,7 +16,7 @@ enum InpaintMaskEncoder {
     /// Renders the strokes into a PNG mask sized to the original image.
     ///
     /// - Parameters:
-    ///   - strokes: stroke paths in view coordinates.
+    ///   - strokes: stroke paths in original-image pixel coordinates.
     ///   - viewSize: the size of the canvas view the strokes were drawn in.
     ///   - imageSize: the native pixel size of the image the mask will overlay.
     ///   - imageFrame: the rect inside `viewSize` where the image was actually
@@ -66,11 +66,6 @@ enum InpaintMaskEncoder {
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
 
-        // Map view coords to image-pixel coords.
-        let scaleX = imageSize.width / imageFrame.width
-        let scaleY = imageSize.height / imageFrame.height
-        let brushScale = (scaleX + scaleY) / 2.0
-
         for stroke in strokes {
             guard let first = stroke.points.first else { continue }
             let isErasing = stroke.isErasing
@@ -84,21 +79,19 @@ enum InpaintMaskEncoder {
                 ctx.setStrokeColor(CGColor(red: value, green: value, blue: value, alpha: 1))
                 ctx.setFillColor(CGColor(red: value, green: value, blue: value, alpha: 1))
             }
-            ctx.setLineWidth(stroke.brushSize * brushScale)
+            ctx.setLineWidth(stroke.brushSize)
             let mapped = stroke.points.map { p -> CGPoint in
-                let localX = p.x - imageFrame.minX
-                let localY = p.y - imageFrame.minY
                 // CoreGraphics bitmap origin is bottom-left; flip Y.
                 return CGPoint(
-                    x: localX * scaleX,
-                    y: imageSize.height - (localY * scaleY)
+                    x: p.x,
+                    y: imageSize.height - p.y
                 )
             }
             ctx.beginPath()
             ctx.move(to: mapped[0])
             _ = first
             if mapped.count == 1 {
-                let radius = (stroke.brushSize * brushScale) / 2
+                let radius = stroke.brushSize / 2
                 ctx.fillEllipse(in: CGRect(
                     x: mapped[0].x - radius,
                     y: mapped[0].y - radius,
