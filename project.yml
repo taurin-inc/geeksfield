@@ -18,6 +18,11 @@ settings:
     CODE_SIGN_STYLE: Automatic
     DEAD_CODE_STRIPPING: YES
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.1
+
 targets:
   Geeksfield:
     type: application
@@ -39,12 +44,20 @@ targets:
         NSHumanReadableCopyright: Copyright © 2026 Geeksfield contributors. MIT License.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
+        SUFeedURL: https://rapid-studio.github.io/geeksfield/appcast.xml
+        SUPublicEDKey: E4GFYrsJhIx3C8TRVuY9Mga0wcxUIjZ+N8URAqQilQk=
+        SUEnableInstallerLauncherService: true
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
     entitlements:
       path: Geeksfield/Geeksfield.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
         com.apple.security.temporary-exception.files.home-relative-path.read-only:
           - /.codex/auth.json
     settings:
@@ -56,3 +69,5 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         COMBINE_HIDPI_IMAGES: YES
         ENABLE_PREVIEWS: YES
+    dependencies:
+      - package: Sparkle
