@@ -17,6 +17,7 @@ jobs:
   release:
     name: Build, notarize, and publish
     runs-on: macos-26
+    environment: release
     timeout-minutes: 90
 
     env:
