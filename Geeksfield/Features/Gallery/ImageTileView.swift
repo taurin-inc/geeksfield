@@ -2,12 +2,13 @@ import SwiftUI
 
 struct ImageTileView: View {
     let asset: ImageAsset
+    var usesExternalAspectLayout = false
     @Environment(AppState.self) private var appState
     @State private var hovered = false
     @State private var imageAspect = CGFloat(1)
 
     var body: some View {
-        ZStack {
+        let tile = ZStack {
             content
                 .clipped()
 
@@ -16,7 +17,6 @@ struct ImageTileView: View {
             variantOverlay
             hoverOverlay
         }
-        .aspectRatio(ImageAspectReader.clamped(imageAspect), contentMode: .fit)
         .scaleEffect(hovered ? 1.01 : 1.0)
         .animation(.easeOut(duration: 0.15), value: hovered)
         .onHover { hovered = $0 }
@@ -24,6 +24,14 @@ struct ImageTileView: View {
             imageAspect = await ImageAspectReader.aspectRatio(for: asset)
         }
         .draggable(transferableURL)
+
+        if usesExternalAspectLayout {
+            tile
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            tile
+                .aspectRatio(ImageAspectReader.clamped(imageAspect), contentMode: .fit)
+        }
     }
 
     @ViewBuilder
@@ -32,8 +40,12 @@ struct ImageTileView: View {
             VStack {
                 HStack(spacing: 6) {
                     Spacer()
-                    baseHoverButton
-                    bookmarkHoverButton
+                    if hovered {
+                        baseHoverButton
+                    }
+                    if hovered || asset.status == .picked {
+                        bookmarkHoverButton
+                    }
                 }
                 Spacer()
             }

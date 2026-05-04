@@ -65,7 +65,7 @@ struct InpaintSheet: View {
                     height: max(geo.size.height, geo.size.height * editor.zoom)
                 )
                 ScrollView([.horizontal, .vertical]) {
-                    InpaintCanvas(imageURL: url, state: editor)
+                    InpaintCanvas(imageURL: url, imageSize: imageSize(for: url), state: editor)
                         .frame(width: size.width, height: size.height)
                 }
                 .onAppear { canvasSize = size }
@@ -160,6 +160,10 @@ struct InpaintSheet: View {
             maskPNG: mask
         )
         dismiss()
+    }
+
+    private func imageSize(for url: URL) -> CGSize {
+        NSImage(contentsOf: url)?.nativePixelSize ?? .zero
     }
 }
 

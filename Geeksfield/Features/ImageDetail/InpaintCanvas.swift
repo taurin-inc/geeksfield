@@ -29,7 +29,7 @@ final class InpaintEditorState {
     var canRedo: Bool { !redoStack.isEmpty }
     var hasMask: Bool { !strokes.isEmpty }
 
-    func beginStroke(at p: CGPoint) {
+    func beginStroke(at p: CGPoint, brushSize: CGFloat) {
         strokes.append(InpaintStroke(points: [p], brushSize: brushSize, isErasing: tool == .eraser))
         redoStack.removeAll()
     }
@@ -58,10 +58,12 @@ final class InpaintEditorState {
 /// is generated at submit time by `InpaintMaskEncoder`.
 struct InpaintCanvas: View {
     let imageURL: URL
+    let imageSize: CGSize
     @Bindable var state: InpaintEditorState
 
     var body: some View {
         GeometryReader { geo in
+            let imageFrame = InpaintMaskEncoder.fittedImageFrame(imageSize: imageSize, containerSize: geo.size)
             ZStack {
                 AsyncImage(url: imageURL) { phase in
                     if let image = phase.image {
@@ -76,12 +78,14 @@ struct InpaintCanvas: View {
                         guard let first = stroke.points.first else { continue }
                         ctx.blendMode = stroke.isErasing ? .destinationOut : .normal
                         let color = Color.red.opacity(0.5)
+                        let displayBrushSize = brushSizeInView(stroke.brushSize, imageFrame: imageFrame)
+                        let firstPoint = pointInView(first, imageFrame: imageFrame)
                         if stroke.points.count == 1 {
-                            let radius = stroke.brushSize / 2
+                            let radius = displayBrushSize / 2
                             ctx.fill(
                                 Path(ellipseIn: CGRect(
-                                    x: first.x - radius,
-                                    y: first.y - radius,
+                                    x: firstPoint.x - radius,
+                                    y: firstPoint.y - radius,
                                     width: radius * 2,
                                     height: radius * 2
                                 )),
@@ -90,15 +94,15 @@ struct InpaintCanvas: View {
                             continue
                         }
                         var path = Path()
-                        path.move(to: first)
+                        path.move(to: firstPoint)
                         for point in stroke.points.dropFirst() {
-                            path.addLine(to: point)
+                            path.addLine(to: pointInView(point, imageFrame: imageFrame))
                         }
                         ctx.stroke(
                             path,
                             with: .color(color),
                             style: StrokeStyle(
-                                lineWidth: stroke.brushSize,
+                                lineWidth: displayBrushSize,
                                 lineCap: .round,
                                 lineJoin: .round
                             )
@@ -108,15 +112,52 @@ struct InpaintCanvas: View {
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
+                            guard let imagePoint = imagePoint(from: value.location, imageFrame: imageFrame) else {
+                                return
+                            }
                             if value.translation == .zero {
-                                state.beginStroke(at: value.location)
+                                state.beginStroke(
+                                    at: imagePoint,
+                                    brushSize: brushSizeInImagePixels(state.brushSize, imageFrame: imageFrame)
+                                )
                             } else {
-                                state.extendStroke(to: value.location)
+                                state.extendStroke(to: imagePoint)
                             }
                         }
                 )
                 .frame(width: geo.size.width, height: geo.size.height)
             }
         }
+    }
+
+    private func imagePoint(from point: CGPoint, imageFrame: CGRect) -> CGPoint? {
+        guard imageFrame.contains(point), imageFrame.width > 0, imageFrame.height > 0 else {
+            return nil
+        }
+        return CGPoint(
+            x: ((point.x - imageFrame.minX) / imageFrame.width) * imageSize.width,
+            y: ((point.y - imageFrame.minY) / imageFrame.height) * imageSize.height
+        )
+    }
+
+    private func pointInView(_ point: CGPoint, imageFrame: CGRect) -> CGPoint {
+        CGPoint(
+            x: imageFrame.minX + (point.x / imageSize.width) * imageFrame.width,
+            y: imageFrame.minY + (point.y / imageSize.height) * imageFrame.height
+        )
+    }
+
+    private func brushSizeInImagePixels(_ brushSize: CGFloat, imageFrame: CGRect) -> CGFloat {
+        guard imageFrame.width > 0, imageFrame.height > 0 else { return brushSize }
+        let scaleX = imageSize.width / imageFrame.width
+        let scaleY = imageSize.height / imageFrame.height
+        return brushSize * ((scaleX + scaleY) / 2)
+    }
+
+    private func brushSizeInView(_ brushSize: CGFloat, imageFrame: CGRect) -> CGFloat {
+        guard imageSize.width > 0, imageSize.height > 0 else { return brushSize }
+        let scaleX = imageFrame.width / imageSize.width
+        let scaleY = imageFrame.height / imageSize.height
+        return brushSize * ((scaleX + scaleY) / 2)
     }
 }

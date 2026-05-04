@@ -7,8 +7,6 @@ struct ImageThreadWorkspaceView: View {
     let asset: ImageAsset
     @Environment(AppState.self) private var appState
     @State private var inpaintOpen = false
-    @State private var inspectorOpen = false
-    @State private var copiedPrompt = false
     @State private var failedAsset: ImageAsset?
 
     private var currentAsset: ImageAsset {
@@ -41,25 +39,40 @@ struct ImageThreadWorkspaceView: View {
                 threadScroll
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if inspectorOpen {
-                    Divider().opacity(0.45)
-                    ImageInspectorDrawer(asset: currentAsset)
-                        .frame(width: 340)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
+                Divider().opacity(0.45)
+
+                SelectedImageSidebar(
+                    asset: currentAsset,
+                    onContinue: {
+                        appState.setBaseImage(currentAsset)
+                    },
+                    onEdit: {
+                        if currentAsset.hasFile { inpaintOpen = true }
+                    },
+                    onPick: {
+                        togglePicked(currentAsset)
+                    },
+                    onExport: {
+                        appState.exportAsset(currentAsset)
+                    },
+                    onRegenerate: {
+                        appState.regenerate(currentAsset)
+                    },
+                    onUseAsReference: {
+                        appState.useAsReference(currentAsset)
+                    },
+                    onDelete: {
+                        appState.deleteAsset(currentAsset)
+                        dismiss()
+                    }
+                )
+                .frame(width: 310)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial)
         .background(Color.black.opacity(0.18))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .padding(12)
         .onTapGesture { /* absorb */ }
-        .animation(.smooth(duration: 0.2), value: inspectorOpen)
     }
 
     private var topBar: some View {
@@ -68,142 +81,76 @@ struct ImageThreadWorkspaceView: View {
             iconButton("xmark", help: l10n.close, action: dismiss)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(l10n.selectedImage)
+                Text(l10n.workTree)
                     .font(.headline)
-                Text(currentSubtitle)
+                Text(treeSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
             Spacer(minLength: 12)
-
-            Label(l10n.iterationThread, systemImage: "point.3.connected.trianglepath.dotted")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(Color.white.opacity(0.06)))
-
-            Divider()
-                .frame(height: 24)
-                .opacity(0.5)
-
-            iconButton("target", help: l10n.continueFromHere) {
-                appState.setBaseImage(currentAsset)
-            }
-            .disabled(!currentAsset.hasFile)
-            iconButton("wand.and.sparkles", help: l10n.edit) {
-                if currentAsset.hasFile { inpaintOpen = true }
-            }
-            .disabled(!currentAsset.hasFile)
-            iconButton(currentAsset.status == .picked ? "bookmark.fill" : "bookmark", help: l10n.pickedToggle) {
-                togglePicked(currentAsset)
-            }
-            .disabled(!currentAsset.hasFile)
-            iconButton("square.and.arrow.down", help: l10n.save) {
-                appState.exportAsset(currentAsset)
-            }
-            .disabled(!currentAsset.hasFile)
-            iconButton(inspectorOpen ? "info.circle.fill" : "info.circle", help: l10n.information) {
-                inspectorOpen.toggle()
-            }
-            moreMenu
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
     }
 
-    private var currentSubtitle: String {
-        var parts: [String] = []
-        if let index = currentAsset.metadata.variantIndex {
-            parts.append("#\(index)")
-        }
-        if currentAsset.status == .picked {
-            parts.append(appState.l10n.picked)
-        }
-        parts.append(currentAsset.metadata.createdAt.formatted(date: .abbreviated, time: .shortened))
-        return parts.joined(separator: " · ")
-    }
-
-    private var moreMenu: some View {
-        let l10n = appState.l10n
-        return Menu {
-            Button(l10n.regenerate, systemImage: "arrow.triangle.2.circlepath") {
-                appState.regenerate(currentAsset)
-            }
-            Button(l10n.useAsReference, systemImage: "photo.on.rectangle") {
-                appState.useAsReference(currentAsset)
-            }
-            Button(copiedPrompt ? l10n.copied : l10n.copy, systemImage: "doc.on.doc") {
-                copyPrompt(currentAsset)
-            }
-            Divider()
-            Button(l10n.delete, systemImage: "trash", role: .destructive) {
-                appState.deleteAsset(currentAsset)
-                dismiss()
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.white.opacity(0.07)))
-                .contentShape(Circle())
-        }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .help(l10n.more)
+    private var treeSubtitle: String {
+        "\(threadRuns.count) \(appState.l10n.requests) · \(threadAssets.count) \(appState.l10n.variants)"
     }
 
     private var threadScroll: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(threadGroups) { group in
-                        IterationThreadGroupSection(
-                            group: group,
-                            currentAssetID: currentAsset.id,
-                            onSelect: { select($0) },
-                            onContinue: {
-                                appState.setBaseImage($0)
-                            },
-                            onEdit: {
-                                select($0)
-                                if $0.hasFile { inpaintOpen = true }
-                            },
-                            onPick: { togglePicked($0) }
-                        )
-                        .id(group.id)
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    AdaptiveImageGridLayout(rowHeight: 250, spacing: 6) {
+                        ForEach(threadAssets) { asset in
+                            AdaptiveImageGridItem(asset: asset) {
+                                IterationThreadAssetCard(
+                                    asset: asset,
+                                    parentAsset: parentAsset(for: asset),
+                                    isCurrent: asset.id == currentAsset.id,
+                                    onSelect: { select(asset) },
+                                    onContinue: {
+                                        appState.setBaseImage(asset)
+                                    },
+                                    onEdit: {
+                                        select(asset)
+                                        if asset.hasFile { inpaintOpen = true }
+                                    },
+                                    onPick: { togglePicked(asset) }
+                                )
+                                .id(asset.id)
+                            }
+                        }
                     }
+                    .frame(width: max(geometry.size.width, 250), alignment: .topLeading)
                 }
-                .padding(.vertical, 18)
-            }
-            .onAppear {
-                proxy.scrollTo(currentGroupID, anchor: .center)
-            }
-            .onChange(of: currentAsset.id) { _, _ in
-                proxy.scrollTo(currentGroupID, anchor: .center)
+                .onAppear {
+                    proxy.scrollTo(currentAsset.id, anchor: .center)
+                }
+                .onChange(of: currentAsset.id) { _, _ in
+                    proxy.scrollTo(currentAsset.id, anchor: .center)
+                }
             }
         }
     }
 
     private var threadRuns: [IterationRun] {
-        appState.threadRuns(for: currentAsset)
+        appState.threadRuns(for: asset)
     }
 
     private var threadGroups: [IterationThreadGroup] {
         IterationThreadGroup.group(threadRuns)
     }
 
-    private var currentRunID: String {
-        currentAsset.metadata.runID ?? currentAsset.id
-    }
-
-    private var currentGroupID: String {
-        threadGroups.first { group in
-            group.runs.contains { $0.id == currentRunID }
-        }?.id ?? currentRunID
+    private var threadAssets: [ImageAsset] {
+        threadRuns
+            .flatMap(\.assets)
+            .sorted {
+                if $0.metadata.createdAt == $1.metadata.createdAt { return $0.id > $1.id }
+                return $0.metadata.createdAt > $1.metadata.createdAt
+            }
     }
 
     private func iconButton(_ system: String, help: String, action: @escaping () -> Void) -> some View {
@@ -233,18 +180,238 @@ struct ImageThreadWorkspaceView: View {
         }
     }
 
-    private func copyPrompt(_ asset: ImageAsset) {
+    private func parentAsset(for asset: ImageAsset) -> ImageAsset? {
+        appState.parentAsset(for: asset)
+    }
+
+    private func dismiss() {
+        appState.presentedAsset = nil
+    }
+}
+
+private struct SelectedImageSidebar: View {
+    let asset: ImageAsset
+    let onContinue: () -> Void
+    let onEdit: () -> Void
+    let onPick: () -> Void
+    let onExport: () -> Void
+    let onRegenerate: () -> Void
+    let onUseAsReference: () -> Void
+    let onDelete: () -> Void
+
+    @Environment(AppState.self) private var appState
+    @State private var copiedPrompt = false
+
+    private var metadata: ImageMetadata { asset.metadata }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    preview
+                    promptBlock
+                    informationBlock
+                    if let reason = metadata.failureReason {
+                        failureBlock(reason)
+                    }
+                }
+                .padding(18)
+            }
+
+            Divider().opacity(0.4)
+
+            actions
+                .padding(18)
+        }
+        .background(Color.black.opacity(0.20))
+    }
+
+    private var preview: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .topTrailing) {
+                if let url = asset.thumbnailURL ?? asset.fileURL {
+                    LocalImage(url: url, contentMode: .fit)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                } else if asset.status == .pending {
+                    ProgressView().controlSize(.small)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                } else if asset.status == .failed {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.title2)
+                        .foregroundStyle(.orange)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                } else {
+                    Image(systemName: "photo")
+                        .font(.title2)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+
+                if asset.status == .picked {
+                    Image(systemName: "bookmark.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.yellow)
+                        .padding(8)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 190)
+    }
+
+    private var promptBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                sectionLabel(appState.l10n.prompt.uppercased(), system: "text.alignleft")
+                Spacer()
+                Button(action: copyPrompt) {
+                    Text(copiedPrompt ? appState.l10n.copied : appState.l10n.copy)
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+            }
+            Text(metadata.prompt.isEmpty ? appState.l10n.emptyPrompt : metadata.prompt)
+                .font(.callout)
+                .foregroundStyle(metadata.prompt.isEmpty ? .secondary : .primary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
+        }
+    }
+
+    private var informationBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionLabel(appState.l10n.information.uppercased(), system: "info.circle")
+            VStack(spacing: 0) {
+                infoRow(appState.l10n.infoModel, metadata.modelID)
+                rowDivider
+                infoRow(appState.l10n.infoProvider, metadata.provider.displayName)
+                if let size = metadata.size {
+                    rowDivider
+                    infoRow(appState.l10n.infoSize, size.description)
+                }
+                if let ratio = metadata.aspectRatio {
+                    rowDivider
+                    infoRow(appState.l10n.infoAspect, ratio)
+                }
+                if let seed = metadata.seed {
+                    rowDivider
+                    infoRow(appState.l10n.infoSeed, "\(seed)")
+                }
+                rowDivider
+                infoRow(appState.l10n.infoCreated, metadata.createdAt.formatted(date: .abbreviated, time: .shortened))
+            }
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
+        }
+    }
+
+    private var actions: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                actionButton("target", title: appState.l10n.continueFromHere, action: onContinue)
+                actionButton("wand.and.sparkles", title: appState.l10n.edit, action: onEdit)
+            }
+            HStack(spacing: 8) {
+                actionButton(asset.status == .picked ? "bookmark.fill" : "bookmark", title: appState.l10n.pickedToggle, action: onPick)
+                actionButton("square.and.arrow.down", title: appState.l10n.save, action: onExport)
+                moreMenu
+            }
+        }
+    }
+
+    private func actionButton(_ system: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: system)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.07)))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(!asset.hasFile)
+        .opacity(asset.hasFile ? 1 : 0.5)
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Button(appState.l10n.regenerate, systemImage: "arrow.triangle.2.circlepath", action: onRegenerate)
+            Button(appState.l10n.useAsReference, systemImage: "photo.on.rectangle", action: onUseAsReference)
+                .disabled(!asset.hasFile)
+            Divider()
+            Button(appState.l10n.delete, systemImage: "trash", role: .destructive, action: onDelete)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 40, height: 38)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.07)))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                }
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .help(appState.l10n.more)
+    }
+
+    private func failureBlock(_ reason: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionLabel(appState.l10n.failureSection.uppercased(), system: "exclamationmark.triangle.fill")
+            Text(reason)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.orange.opacity(0.10)))
+        }
+    }
+
+    private var rowDivider: some View {
+        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+    }
+
+    private func infoRow(_ key: String, _ value: String) -> some View {
+        HStack {
+            Text(key).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).monospacedDigit().lineLimit(1).truncationMode(.middle)
+        }
+        .font(.callout)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private func sectionLabel(_ title: String, system: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: system)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func copyPrompt() {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(asset.metadata.prompt, forType: .string)
+        NSPasteboard.general.setString(metadata.prompt, forType: .string)
         copiedPrompt = true
         Task {
             try? await Task.sleep(for: .seconds(1.4))
             copiedPrompt = false
         }
-    }
-
-    private func dismiss() {
-        appState.presentedAsset = nil
     }
 }
 
@@ -271,8 +438,8 @@ private struct IterationThreadGroupSection: View {
                     ForEach(group.assets) { asset in
                         IterationThreadAssetCard(
                             asset: asset,
+                            parentAsset: appState.parentAsset(for: asset),
                             isCurrent: asset.id == currentAssetID,
-                            showsPrompt: group.runs.count > 1,
                             onSelect: { onSelect(asset) },
                             onContinue: { onContinue(asset) },
                             onEdit: { onEdit(asset) },
@@ -323,11 +490,6 @@ private struct IterationThreadGroupSection: View {
                 Text(appState.l10n.parentImage)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                if let index = parent.metadata.variantIndex {
-                    Text("#\(index)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
                 Text(parent.metadata.prompt.isEmpty ? appState.l10n.emptyPrompt : parent.metadata.prompt)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -345,15 +507,8 @@ private struct IterationThreadGroupSection: View {
     }
 
     private var headerTitle: String {
-        guard group.runs.count > 1 else {
-            let prompt = group.runs.first?.prompt ?? ""
-            return prompt.isEmpty ? appState.l10n.emptyPrompt : prompt
-        }
-        if let parent = parentAsset {
-            let label = parent.metadata.variantIndex.map { "#\($0)" } ?? appState.l10n.parentImage
-            return "\(appState.l10n.baseImage) \(label)"
-        }
-        return appState.l10n.baseImage
+        let prompt = group.runs.first?.prompt ?? parentAsset?.metadata.prompt ?? ""
+        return prompt.isEmpty ? appState.l10n.emptyPrompt : prompt
     }
 
     private var headerSubtitle: String {
@@ -382,8 +537,8 @@ private struct IterationThreadGroupSection: View {
 
 private struct IterationThreadAssetCard: View {
     let asset: ImageAsset
+    let parentAsset: ImageAsset?
     let isCurrent: Bool
-    let showsPrompt: Bool
     let onSelect: () -> Void
     let onContinue: () -> Void
     let onEdit: () -> Void
@@ -391,84 +546,35 @@ private struct IterationThreadAssetCard: View {
 
     @Environment(AppState.self) private var appState
     @State private var hovered = false
-    @State private var imageAspect = CGFloat(1)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            imageSurface
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onSelect)
-
-            HStack(spacing: 8) {
-                if let index = asset.metadata.variantIndex {
-                    Text("#\(index)")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(isCurrent ? Color.accentColor : Color.secondary)
-                }
-                if isCurrent {
-                    Text(appState.l10n.currentImage)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(Color.black)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.white))
-                }
-                if asset.status == .picked {
-                    Image(systemName: "bookmark.fill")
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(width: cardWidth)
-
-            if showsPrompt {
-                Text(asset.metadata.prompt.isEmpty ? appState.l10n.emptyPrompt : asset.metadata.prompt)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
-                    .frame(width: cardWidth, alignment: .leading)
-            }
-        }
+        imageSurface
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onSelect)
     }
 
     private var imageSurface: some View {
-        ZStack(alignment: .topTrailing) {
-            assetImage
-                .frame(width: cardWidth, height: cardHeight)
+        GeometryReader { proxy in
+            ZStack(alignment: .topTrailing) {
+                assetImage
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
 
-            if asset.id == appState.activeBaseImageID {
-                VStack {
-                    HStack {
-                        Label(appState.l10n.baseImage, systemImage: "target")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(Color.black)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(Color.accentColor))
-                        Spacer()
-                    }
-                    Spacer()
+                if let parentAsset {
+                    parentPreview(parentAsset)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
-                .padding(8)
-            }
 
-            if hovered || isCurrent {
                 quickActions
-                    .padding(8)
-                    .transition(.opacity)
+                    .padding(10)
             }
         }
-        .frame(width: cardWidth, height: cardHeight)
-        .opacity(isCurrent || hovered ? 1 : 0.46)
-        .saturation(isCurrent || hovered ? 1 : 0.55)
-        .scaleEffect(hovered ? 1.01 : 1)
-        .animation(.easeOut(duration: 0.15), value: hovered)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .opacity(1)
+        .saturation(1)
         .animation(.easeOut(duration: 0.18), value: isCurrent)
         .onHover { hovered = $0 }
-        .task(id: asset.fileURL?.path ?? asset.thumbnailURL?.path ?? asset.id) {
-            imageAspect = await ImageAspectReader.aspectRatio(for: asset)
-        }
     }
 
     @ViewBuilder
@@ -501,9 +607,15 @@ private struct IterationThreadAssetCard: View {
 
     private var quickActions: some View {
         HStack(spacing: 6) {
-            icon("target", help: appState.l10n.continueFromHere, action: onContinue)
-            icon("wand.and.sparkles", help: appState.l10n.edit, action: onEdit)
-            icon(asset.status == .picked ? "bookmark.fill" : "bookmark", help: appState.l10n.pickedToggle, action: onPick)
+            if hovered || isCurrent {
+                icon("target", help: appState.l10n.continueFromHere, action: onContinue)
+                    .transition(.opacity)
+                icon("wand.and.sparkles", help: appState.l10n.edit, action: onEdit)
+                    .transition(.opacity)
+            }
+            if hovered || asset.status == .picked {
+                icon(asset.status == .picked ? "bookmark.fill" : "bookmark", help: appState.l10n.pickedToggle, action: onPick)
+            }
         }
     }
 
@@ -522,22 +634,66 @@ private struct IterationThreadAssetCard: View {
         .help(help)
     }
 
-    private var cardWidth: CGFloat {
-        let base = CGFloat(250)
-        let aspect = ImageAspectReader.clamped(imageAspect)
-        if aspect >= 1 {
-            return min(base * aspect, base * 1.55)
-        }
-        return base
+    private func parentPreview(_ parent: ImageAsset) -> some View {
+        ParentImagePreview(
+            parent: parent,
+            label: appState.l10n.parentImage,
+            action: onSelectParent(parent)
+        )
     }
 
-    private var cardHeight: CGFloat {
-        let base = CGFloat(250)
-        let aspect = ImageAspectReader.clamped(imageAspect)
-        if aspect < 1 {
-            return min(base / aspect, base * 1.55)
+    private func onSelectParent(_ parent: ImageAsset) -> () -> Void {
+        {
+            guard parent.status != .failed else { return }
+            appState.presentedAsset = parent
         }
-        return base
+    }
+}
+
+private struct ParentImagePreview: View {
+    let parent: ImageAsset
+    let label: String
+    let action: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .bottom) {
+                previewImage
+                    .frame(width: 58, height: 58)
+                    .clipped()
+
+                if hovered {
+                    Text(label)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.bottom, 5)
+                        .transition(.opacity)
+                }
+            }
+            .frame(width: 58, height: 58)
+            .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .onHover { hovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovered)
+    }
+
+    @ViewBuilder
+    private var previewImage: some View {
+        if let url = parent.thumbnailURL ?? parent.fileURL {
+            LocalImage(url: url, contentMode: .fill)
+        } else {
+            Image(systemName: "photo")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
     }
 }
 
@@ -592,10 +748,6 @@ private struct ImageInspectorDrawer: View {
                 if let seed = metadata.seed {
                     rowDivider
                     infoRow(appState.l10n.infoSeed, "\(seed)")
-                }
-                if let index = metadata.variantIndex {
-                    rowDivider
-                    infoRow(appState.l10n.variants, "#\(index)")
                 }
                 rowDivider
                 infoRow(appState.l10n.infoCreated, metadata.createdAt.formatted(date: .abbreviated, time: .shortened))
