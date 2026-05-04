@@ -29,5 +29,15 @@
 	</dict>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Geeksfield contributors. MIT License.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://rapid-studio.github.io/geeksfield/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>E4GFYrsJhIx3C8TRVuY9Mga0wcxUIjZ+N8URAqQilQk=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

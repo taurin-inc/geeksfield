@@ -1,0 +1,262 @@
+name: Release macOS App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, notarize, and publish
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    env:
+      APP_NAME: Geeksfield
+      SCHEME: Geeksfield
+      PROJECT: Geeksfield.xcodeproj
+      ARCHIVE_PATH: build/Geeksfield.xcarchive
+      EXPORT_PATH: build/export
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          VERSION="$(ruby -ryaml -e 'puts YAML.load_file("project.yml").dig("settings", "base", "MARKETING_VERSION")')"
+          BUILD="$(ruby -ryaml -e 'puts YAML.load_file("project.yml").dig("settings", "base", "CURRENT_PROJECT_VERSION")')"
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip existing release tag
+        id: existing_tag
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release tag ${{ steps.version.outputs.tag }} already exists. Nothing to publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate signing secrets
+        if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          test -n "$APPLE_CERTIFICATE_BASE64"
+          test -n "$APPLE_CERTIFICATE_PASSWORD"
+          test -n "$APPLE_TEAM_ID"
+          test -n "$APP_STORE_CONNECT_KEY_ID"
+          test -n "$APP_STORE_CONNECT_ISSUER_ID"
+          test -n "$APP_STORE_CONNECT_API_KEY_BASE64"
+          test -n "$SPARKLE_PRIVATE_KEY"
+
+      - name: Generate Xcode project
+        if: steps.existing_tag.outputs.exists == 'false'
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Import Developer ID certificate
+        if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
+          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" "$(security list-keychain -d user | sed s/\\\"//g)"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Archive
+        if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+
+      - name: Export Developer ID app
+        if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>developer-id</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Package for notarization
+        if: steps.existing_tag.outputs.exists == 'false'
+        run: |
+          mkdir -p build
+          ditto -c -k --keepParent "$EXPORT_PATH/$APP_NAME.app" "build/${APP_NAME}-${{ steps.version.outputs.tag }}-unsigned-ticket.zip"
+
+      - name: Notarize
+        if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > "$API_KEY_PATH"
+          xcrun notarytool submit "build/${APP_NAME}-${{ steps.version.outputs.tag }}-unsigned-ticket.zip" \
+            --key "$API_KEY_PATH" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --wait
+
+      - name: Staple and package release asset
+        if: steps.existing_tag.outputs.exists == 'false'
+        run: |
+          xcrun stapler staple "$EXPORT_PATH/$APP_NAME.app"
+          xcrun stapler validate "$EXPORT_PATH/$APP_NAME.app"
+          ditto -c -k --keepParent "$EXPORT_PATH/$APP_NAME.app" "build/${APP_NAME}-${{ steps.version.outputs.tag }}.zip"
+
+      - name: Download Sparkle tools
+        if: steps.existing_tag.outputs.exists == 'false'
+        run: |
+          mkdir -p build/sparkle
+          curl -L \
+            -o build/sparkle/Sparkle-2.9.1.tar.xz \
+            https://github.com/sparkle-project/Sparkle/releases/download/2.9.1/Sparkle-2.9.1.tar.xz
+          tar -xf build/sparkle/Sparkle-2.9.1.tar.xz -C build/sparkle
+
+      - name: Sign Sparkle update archive
+        if: steps.existing_tag.outputs.exists == 'false'
+        id: sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          ASSET_NAME="${APP_NAME}-${{ steps.version.outputs.tag }}.zip"
+          ASSET_PATH="build/${ASSET_NAME}"
+          SIGN_OUTPUT="$(echo "$SPARKLE_PRIVATE_KEY" | build/sparkle/bin/sign_update --ed-key-file - "$ASSET_PATH")"
+          ED_SIGNATURE="$(echo "$SIGN_OUTPUT" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')"
+          LENGTH="$(echo "$SIGN_OUTPUT" | sed -n 's/.* length="\([0-9]*\)".*/\1/p')"
+          test -n "$ED_SIGNATURE"
+          test -n "$LENGTH"
+          echo "asset_name=${ASSET_NAME}" >> "$GITHUB_OUTPUT"
+          echo "asset_url=https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.version.outputs.tag }}/${ASSET_NAME}" >> "$GITHUB_OUTPUT"
+          echo "ed_signature=${ED_SIGNATURE}" >> "$GITHUB_OUTPUT"
+          echo "length=${LENGTH}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" "build/${{ steps.sparkle.outputs.asset_name }}" \
+            --target "$GITHUB_SHA" \
+            --title "${APP_NAME} ${{ steps.version.outputs.tag }}" \
+            --generate-notes
+
+      - name: Update appcast
+        if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_BUILD: ${{ steps.version.outputs.build }}
+          RELEASE_URL: ${{ steps.sparkle.outputs.asset_url }}
+          RELEASE_LENGTH: ${{ steps.sparkle.outputs.length }}
+          RELEASE_ED_SIGNATURE: ${{ steps.sparkle.outputs.ed_signature }}
+        run: |
+          ruby <<'RUBY'
+          require "rexml/document"
+          require "time"
+
+          path = "docs/appcast.xml"
+          doc = REXML::Document.new(File.read(path))
+          channel = REXML::XPath.first(doc, "/rss/channel")
+          raise "Missing appcast channel" unless channel
+
+          channel.get_elements("item").each do |existing|
+            version = existing.elements["sparkle:shortVersionString"]&.text
+            channel.delete_element(existing) if version == ENV.fetch("RELEASE_VERSION")
+          end
+
+          item = REXML::Element.new("item")
+          title = item.add_element("title")
+          title.text = "Version #{ENV.fetch("RELEASE_VERSION")}"
+
+          pub_date = item.add_element("pubDate")
+          pub_date.text = Time.now.utc.rfc2822
+
+          release_notes = item.add_element("sparkle:releaseNotesLink")
+          release_notes.text = "https://github.com/#{ENV.fetch("GITHUB_REPOSITORY")}/releases/tag/#{ENV.fetch("RELEASE_TAG")}"
+
+          build = item.add_element("sparkle:version")
+          build.text = ENV.fetch("RELEASE_BUILD")
+
+          short_version = item.add_element("sparkle:shortVersionString")
+          short_version.text = ENV.fetch("RELEASE_VERSION")
+
+          enclosure = item.add_element("enclosure")
+          enclosure.add_attribute("url", ENV.fetch("RELEASE_URL"))
+          enclosure.add_attribute("length", ENV.fetch("RELEASE_LENGTH"))
+          enclosure.add_attribute("type", "application/octet-stream")
+          enclosure.add_attribute("sparkle:edSignature", ENV.fetch("RELEASE_ED_SIGNATURE"))
+
+          channel.add_element(item)
+
+          formatter = REXML::Formatters::Pretty.new(2)
+          formatter.compact = true
+          File.open(path, "w") do |file|
+            file.write(%(<?xml version="1.0" encoding="utf-8"?>\n))
+            formatter.write(doc.root, file)
+            file.write("\n")
+          end
+          RUBY
+
+      - name: Publish appcast to GitHub Pages source
+        if: steps.existing_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/appcast.xml
+          git commit -m "Update appcast for ${{ steps.version.outputs.tag }}"
+          git push origin HEAD:main

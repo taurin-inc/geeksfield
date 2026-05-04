@@ -13,7 +13,7 @@ final class AppState {
     let thumbnailStore = ThumbnailStore()
     let referenceStore = ReferenceStore()
     let chatLog = ChatLogStore()
-    let autoUpdater: any AutoUpdater = NoOpAutoUpdater()
+    let autoUpdater: any AutoUpdater = SparkleAutoUpdater()
 
     @ObservationIgnored
     private lazy var generationOrchestrator = GenerationOrchestrator(
