@@ -96,32 +96,28 @@ struct ImageThreadWorkspaceView: View {
     }
 
     private var treeSubtitle: String {
-        "\(threadRuns.count) \(appState.l10n.requests) · \(threadAssets.count) \(appState.l10n.variants)"
+        "\(threadRuns.count) \(appState.l10n.requests) · \(threadRuns.reduce(0) { $0 + $1.assets.count }) \(appState.l10n.variants)"
     }
 
     private var threadScroll: some View {
         GeometryReader { geometry in
             ScrollViewReader { proxy in
                 ScrollView {
-                    AdaptiveImageGridLayout(rowHeight: 250, spacing: 6) {
-                        ForEach(threadAssets) { asset in
-                            AdaptiveImageGridItem(asset: asset) {
-                                IterationThreadAssetCard(
-                                    asset: asset,
-                                    parentAsset: parentAsset(for: asset),
-                                    isCurrent: asset.id == currentAsset.id,
-                                    onSelect: { select(asset) },
-                                    onContinue: {
-                                        appState.setBaseImage(asset)
-                                    },
-                                    onEdit: {
-                                        select(asset)
-                                        if asset.hasFile { inpaintOpen = true }
-                                    },
-                                    onPick: { togglePicked(asset) }
-                                )
-                                .id(asset.id)
-                            }
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(threadRunsNewestFirst.enumerated()), id: \.element.id) { index, run in
+                            ImageThreadRunSection(
+                                run: run,
+                                requestNumber: threadRuns.count - index,
+                                currentAssetID: currentAsset.id,
+                                onSelect: { select($0) },
+                                onContinue: { appState.setBaseImage($0) },
+                                onEdit: { asset in
+                                    select(asset)
+                                    if asset.hasFile { inpaintOpen = true }
+                                },
+                                onPick: { togglePicked($0) }
+                            )
+                            .id(run.id)
                         }
                     }
                     .frame(width: max(geometry.size.width, 250), alignment: .topLeading)
@@ -140,17 +136,11 @@ struct ImageThreadWorkspaceView: View {
         appState.threadRuns(for: asset)
     }
 
-    private var threadGroups: [IterationThreadGroup] {
-        IterationThreadGroup.group(threadRuns)
-    }
-
-    private var threadAssets: [ImageAsset] {
-        threadRuns
-            .flatMap(\.assets)
-            .sorted {
-                if $0.metadata.createdAt == $1.metadata.createdAt { return $0.id > $1.id }
-                return $0.metadata.createdAt > $1.metadata.createdAt
-            }
+    private var threadRunsNewestFirst: [IterationRun] {
+        threadRuns.sorted {
+            if $0.latestAt == $1.latestAt { return $0.id > $1.id }
+            return $0.latestAt > $1.latestAt
+        }
     }
 
     private func iconButton(_ system: String, help: String, action: @escaping () -> Void) -> some View {
@@ -180,12 +170,154 @@ struct ImageThreadWorkspaceView: View {
         }
     }
 
-    private func parentAsset(for asset: ImageAsset) -> ImageAsset? {
-        appState.parentAsset(for: asset)
-    }
-
     private func dismiss() {
         appState.presentedAsset = nil
+    }
+}
+
+private struct ImageThreadRunSection: View {
+    let run: IterationRun
+    let requestNumber: Int
+    let currentAssetID: String
+    let onSelect: (ImageAsset) -> Void
+    let onContinue: (ImageAsset) -> Void
+    let onEdit: (ImageAsset) -> Void
+    let onPick: (ImageAsset) -> Void
+
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            runHeader
+
+            AdaptiveImageGridLayout(rowHeight: 250, spacing: 6) {
+                ForEach(run.assets) { asset in
+                    AdaptiveImageGridItem(asset: asset) {
+                        IterationThreadAssetCard(
+                            asset: asset,
+                            isCurrent: asset.id == currentAssetID,
+                            onSelect: { onSelect(asset) },
+                            onContinue: { onContinue(asset) },
+                            onEdit: { onEdit(asset) },
+                            onPick: { onPick(asset) }
+                        )
+                        .id(asset.id)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.vertical, 18)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.45)
+        }
+    }
+
+    private var runHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(requestNumber)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(run.prompt.isEmpty ? appState.l10n.emptyPrompt : run.prompt)
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .textSelection(.enabled)
+                Text(headerSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !sourceItems.isEmpty {
+                sourceStrip
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private var sourceStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(sourceItems) { item in
+                    RequestSourceThumbnail(item: item) {
+                        if let assetID = item.assetID,
+                           let asset = appState.asset(withID: assetID, in: run.projectID) {
+                            onSelect(asset)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .frame(width: CGFloat(sourceItems.count) * 44 + CGFloat(max(0, sourceItems.count - 1)) * 8, alignment: .trailing)
+    }
+
+    private var sourceItems: [RequestSourceItem] {
+        var items: [RequestSourceItem] = []
+        if let parentID = run.parentImageID,
+           let parent = appState.asset(withID: parentID, in: run.projectID),
+           let url = parent.thumbnailURL ?? parent.fileURL {
+            items.append(RequestSourceItem(
+                id: "parent:\(parentID)",
+                title: appState.l10n.parentImage,
+                url: url,
+                assetID: parentID
+            ))
+        }
+
+        let parentID = run.parentImageID
+        for refID in run.referenceIDs where refID != parentID {
+            if let url = appState.referenceThumbnailURL(for: refID) {
+                items.append(RequestSourceItem(
+                    id: "reference:\(refID)",
+                    title: appState.l10n.reference,
+                    url: url,
+                    assetID: refID.hasPrefix("ref_") ? nil : refID
+                ))
+            }
+        }
+        return items
+    }
+
+    private var headerSubtitle: String {
+        "\(run.assets.count) \(appState.l10n.variants) · \(appState.l10n.dateTime(run.latestAt))"
+    }
+}
+
+private struct RequestSourceItem: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let url: URL
+    let assetID: String?
+}
+
+private struct RequestSourceThumbnail: View {
+    let item: RequestSourceItem
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomLeading) {
+                LocalImage(url: item.url, contentMode: .fill)
+                    .frame(width: 36, height: 36)
+                    .clipped()
+            }
+            .frame(width: 36, height: 36)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .help(item.title)
     }
 }
 
@@ -304,7 +436,7 @@ private struct SelectedImageSidebar: View {
                     infoRow(appState.l10n.infoSeed, "\(seed)")
                 }
                 rowDivider
-                infoRow(appState.l10n.infoCreated, metadata.createdAt.formatted(date: .abbreviated, time: .shortened))
+                infoRow(appState.l10n.infoCreated, appState.l10n.dateTime(metadata.createdAt))
             }
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
         }
@@ -438,7 +570,6 @@ private struct IterationThreadGroupSection: View {
                     ForEach(group.assets) { asset in
                         IterationThreadAssetCard(
                             asset: asset,
-                            parentAsset: appState.parentAsset(for: asset),
                             isCurrent: asset.id == currentAssetID,
                             onSelect: { onSelect(asset) },
                             onContinue: { onContinue(asset) },
@@ -468,7 +599,8 @@ private struct IterationThreadGroupSection: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(headerTitle)
                     .font(.title3.weight(.semibold))
-                    .lineLimit(3)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .textSelection(.enabled)
                 Text(headerSubtitle)
                     .font(.caption)
@@ -513,9 +645,9 @@ private struct IterationThreadGroupSection: View {
 
     private var headerSubtitle: String {
         if group.runs.count > 1 {
-            return "\(group.runs.count) \(appState.l10n.requests) · \(group.assets.count) \(appState.l10n.variants) · \(group.latestAt.formatted(date: .abbreviated, time: .shortened))"
+            return "\(group.runs.count) \(appState.l10n.requests) · \(group.assets.count) \(appState.l10n.variants) · \(appState.l10n.dateTime(group.latestAt))"
         }
-        return "\(group.assets.count) \(appState.l10n.variants) · \(group.latestAt.formatted(date: .abbreviated, time: .shortened))"
+        return "\(group.assets.count) \(appState.l10n.variants) · \(appState.l10n.dateTime(group.latestAt))"
     }
 
     private var operationLabel: String {
@@ -537,7 +669,6 @@ private struct IterationThreadGroupSection: View {
 
 private struct IterationThreadAssetCard: View {
     let asset: ImageAsset
-    let parentAsset: ImageAsset?
     let isCurrent: Bool
     let onSelect: () -> Void
     let onContinue: () -> Void
@@ -559,12 +690,6 @@ private struct IterationThreadAssetCard: View {
                 assetImage
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .clipped()
-
-                if let parentAsset {
-                    parentPreview(parentAsset)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                }
 
                 quickActions
                     .padding(10)
@@ -607,13 +732,13 @@ private struct IterationThreadAssetCard: View {
 
     private var quickActions: some View {
         HStack(spacing: 6) {
-            if hovered || isCurrent {
+            if asset.hasFile, hovered || isCurrent {
                 icon("target", help: appState.l10n.continueFromHere, action: onContinue)
                     .transition(.opacity)
                 icon("wand.and.sparkles", help: appState.l10n.edit, action: onEdit)
                     .transition(.opacity)
             }
-            if hovered || asset.status == .picked {
+            if asset.hasFile, hovered || asset.status == .picked {
                 icon(asset.status == .picked ? "bookmark.fill" : "bookmark", help: appState.l10n.pickedToggle, action: onPick)
             }
         }
@@ -634,67 +759,6 @@ private struct IterationThreadAssetCard: View {
         .help(help)
     }
 
-    private func parentPreview(_ parent: ImageAsset) -> some View {
-        ParentImagePreview(
-            parent: parent,
-            label: appState.l10n.parentImage,
-            action: onSelectParent(parent)
-        )
-    }
-
-    private func onSelectParent(_ parent: ImageAsset) -> () -> Void {
-        {
-            guard parent.status != .failed else { return }
-            appState.presentedAsset = parent
-        }
-    }
-}
-
-private struct ParentImagePreview: View {
-    let parent: ImageAsset
-    let label: String
-    let action: () -> Void
-
-    @State private var hovered = false
-
-    var body: some View {
-        Button(action: action) {
-            ZStack(alignment: .bottom) {
-                previewImage
-                    .frame(width: 58, height: 58)
-                    .clipped()
-
-                if hovered {
-                    Text(label)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .padding(.bottom, 5)
-                        .transition(.opacity)
-                }
-            }
-            .frame(width: 58, height: 58)
-            .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 4)
-        }
-        .buttonStyle(.plain)
-        .help(label)
-        .onHover { hovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovered)
-    }
-
-    @ViewBuilder
-    private var previewImage: some View {
-        if let url = parent.thumbnailURL ?? parent.fileURL {
-            LocalImage(url: url, contentMode: .fill)
-        } else {
-            Image(systemName: "photo")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-    }
 }
 
 private struct ImageInspectorDrawer: View {
@@ -750,7 +814,7 @@ private struct ImageInspectorDrawer: View {
                     infoRow(appState.l10n.infoSeed, "\(seed)")
                 }
                 rowDivider
-                infoRow(appState.l10n.infoCreated, metadata.createdAt.formatted(date: .abbreviated, time: .shortened))
+                infoRow(appState.l10n.infoCreated, appState.l10n.dateTime(metadata.createdAt))
             }
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
         }

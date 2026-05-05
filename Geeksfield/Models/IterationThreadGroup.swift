@@ -115,6 +115,7 @@ struct IterationThreadGroup: Identifiable, Hashable, Sendable {
                 createdAt: created,
                 latestAt: latest,
                 parentImageID: run.parentImageID,
+                referenceIDs: run.referenceIDs,
                 operation: run.operation,
                 assets: kept
             )

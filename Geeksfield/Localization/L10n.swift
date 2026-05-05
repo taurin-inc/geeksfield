@@ -29,6 +29,41 @@ struct L10n: Sendable, Equatable {
         lang == .korean ? ko : en
     }
 
+    var locale: Locale {
+        switch lang {
+        case .korean: return Locale(identifier: "ko_KR")
+        case .english: return Locale(identifier: "en_US")
+        }
+    }
+
+    func dateTime(_ date: Date) -> String {
+        date.formatted(
+            Date.FormatStyle()
+                .year()
+                .month()
+                .day()
+                .hour()
+                .minute()
+                .locale(locale)
+        )
+    }
+
+    func time(_ date: Date) -> String {
+        date.formatted(
+            Date.FormatStyle()
+                .hour()
+                .minute()
+                .locale(locale)
+        )
+    }
+
+    func relativeDate(_ date: Date) -> String {
+        date.formatted(
+            Date.RelativeFormatStyle(presentation: .named)
+                .locale(locale)
+        )
+    }
+
     // MARK: Common
     var done: String { t("완료", "Done") }
     var cancel: String { t("취소", "Cancel") }

@@ -7,6 +7,7 @@ struct IterationRun: Identifiable, Hashable, Sendable {
     let createdAt: Date
     let latestAt: Date
     let parentImageID: String?
+    let referenceIDs: [String]
     let operation: ImageOperation
     let assets: [ImageAsset]
 
@@ -29,6 +30,7 @@ struct IterationRun: Identifiable, Hashable, Sendable {
                 createdAt: created,
                 latestAt: latest,
                 parentImageID: first.metadata.parentImageID,
+                referenceIDs: first.metadata.referenceIDs,
                 operation: operation,
                 assets: sorted
             )
