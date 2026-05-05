@@ -1,0 +1,35 @@
+name: Main PR Gate
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  require-dev-source:
+    name: Require dev as main source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close non-dev PRs to main
+        if: github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          gh pr close "$PR_URL" --comment "Closing this automatically: main only accepts pull requests from taurin-inc/geeksfield:dev. Please merge this work into dev first, then open the standard dev -> main release PR."
+          echo "Rejected main PR source: ${HEAD_REPO}:${HEAD_REF}"
+          exit 1
+
+      - name: Accept dev release PR
+        run: echo "main PR source is dev"
