@@ -201,6 +201,7 @@ private struct SelectedImageSidebar: View {
 
     @Environment(AppState.self) private var appState
     @State private var copiedPrompt = false
+    @State private var previewOpen = false
 
     private var metadata: ImageMetadata { asset.metadata }
 
@@ -224,38 +225,49 @@ private struct SelectedImageSidebar: View {
                 .padding(18)
         }
         .background(Color.black.opacity(0.20))
+        .sheet(isPresented: $previewOpen) {
+            ImagePreviewSheet(asset: asset)
+        }
     }
 
     private var preview: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .topTrailing) {
-                if let url = asset.thumbnailURL ?? asset.fileURL {
-                    LocalImage(url: url, contentMode: .fit)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .clipped()
-                } else if asset.status == .pending {
-                    ProgressView().controlSize(.small)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                } else if asset.status == .failed {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.title2)
-                        .foregroundStyle(.orange)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                } else {
-                    Image(systemName: "photo")
-                        .font(.title2)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                }
+        Button {
+            if asset.hasFile {
+                previewOpen = true
+            }
+        } label: {
+            GeometryReader { proxy in
+                ZStack(alignment: .topTrailing) {
+                    if let url = asset.thumbnailURL ?? asset.fileURL {
+                        LocalImage(url: url, contentMode: .fit)
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .clipped()
+                    } else if asset.status == .pending {
+                        ProgressView().controlSize(.small)
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    } else if asset.status == .failed {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.title2)
+                            .foregroundStyle(.orange)
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.title2)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    }
 
-                if asset.status == .picked {
-                    Image(systemName: "bookmark.fill")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.yellow)
-                        .padding(8)
+                    if asset.status == .picked {
+                        Image(systemName: "bookmark.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.yellow)
+                            .padding(8)
+                    }
                 }
             }
         }
+        .buttonStyle(.plain)
+        .disabled(!asset.hasFile)
         .frame(maxWidth: .infinity)
         .frame(height: 190)
     }
@@ -345,6 +357,8 @@ private struct SelectedImageSidebar: View {
     private var moreMenu: some View {
         Menu {
             Button(appState.l10n.regenerate, systemImage: "arrow.triangle.2.circlepath", action: onRegenerate)
+            Button(appState.l10n.copyImage, systemImage: "doc.on.doc", action: copyImage)
+                .disabled(!asset.hasFile)
             Button(appState.l10n.useAsReference, systemImage: "photo.on.rectangle", action: onUseAsReference)
                 .disabled(!asset.hasFile)
             Divider()
@@ -412,6 +426,53 @@ private struct SelectedImageSidebar: View {
             try? await Task.sleep(for: .seconds(1.4))
             copiedPrompt = false
         }
+    }
+
+    private func copyImage() {
+        guard let url = asset.fileURL,
+              let data = try? Data(contentsOf: url) else {
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setData(data, forType: .png)
+        if let image = NSImage(data: data),
+           let tiff = image.tiffRepresentation {
+            pasteboard.setData(tiff, forType: .tiff)
+        }
+    }
+}
+
+private struct ImagePreviewSheet: View {
+    let asset: ImageAsset
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.92)
+                .ignoresSafeArea()
+
+            if let url = asset.fileURL {
+                LocalImage(url: url, contentMode: .fit)
+                    .padding(24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.12)))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(16)
+        }
+        .frame(minWidth: 820, minHeight: 620)
     }
 }
 

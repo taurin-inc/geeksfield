@@ -1,5 +1,10 @@
 import Foundation
 
+private enum SlotGenerationResult: Sendable {
+    case success(slot: Int, id: String, data: Data)
+    case failure(slot: Int, id: String, reason: String)
+}
+
 /// Coordinates a batch image generation:
 ///   1. Writes N placeholder metadata entries (status .pending) so the UI can
 ///      show inflight tiles immediately.
@@ -95,62 +100,77 @@ final class GenerationOrchestrator {
         }
         onUpdate()
 
-        do {
-            let refs = resolveReferences(projectID: request.projectID, ids: request.referenceIDs)
-            let images = try await provider.generate(
-                request: request,
-                referenceImages: refs,
-                apiKey: apiKey
-            )
-
+        let refs = resolveReferences(projectID: request.projectID, ids: request.referenceIDs)
+        try await withThrowingTaskGroup(of: SlotGenerationResult.self) { group in
             for (slot, id) in slotIDs.enumerated() {
-                guard slot < images.count else {
-                    if var meta = try? metadataStore.read(projectID: request.projectID, imageID: id) {
-                        meta.status = .failed
-                        meta.failureReason = "No image returned for slot \(slot + 1)."
-                        try? metadataStore.write(meta)
+                let slotRequest = GenerationRequest(
+                    projectID: request.projectID,
+                    prompt: request.prompt,
+                    negativePrompt: request.negativePrompt,
+                    model: request.model,
+                    size: request.size,
+                    aspectRatio: request.aspectRatio,
+                    batchSize: 1,
+                    referenceIDs: request.referenceIDs,
+                    parentImageID: request.parentImageID,
+                    seed: request.seed
+                )
+                group.addTask {
+                    do {
+                        let images = try await provider.generate(
+                            request: slotRequest,
+                            referenceImages: refs,
+                            apiKey: apiKey
+                        )
+                        guard let image = images.first else {
+                            return .failure(slot: slot, id: id, reason: "No image returned for slot \(slot + 1).")
+                        }
+                        return .success(slot: slot, id: id, data: image)
+                    } catch {
+                        let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+                        return .failure(slot: slot, id: id, reason: reason)
                     }
-                    continue
                 }
-                let data = images[slot]
-                do {
-                    let fileURL = try imageStore.savePNG(
-                        data: data,
-                        projectID: request.projectID,
-                        imageID: id,
-                        status: .draft,
-                        createdAt: now
-                    )
-                    _ = try? thumbnailStore.generate(
-                        for: fileURL,
-                        projectID: request.projectID,
-                        imageID: id
-                    )
-                    if var meta = try? metadataStore.read(projectID: request.projectID, imageID: id) {
-                        meta.status = .draft
-                        meta.failureReason = nil
-                        try? metadataStore.write(meta)
+            }
+
+            for try await result in group {
+                switch result {
+                case .success(_, let id, let data):
+                    do {
+                        let fileURL = try imageStore.savePNG(
+                            data: data,
+                            projectID: request.projectID,
+                            imageID: id,
+                            status: .draft,
+                            createdAt: now
+                        )
+                        _ = try? thumbnailStore.generate(
+                            for: fileURL,
+                            projectID: request.projectID,
+                            imageID: id
+                        )
+                        if var meta = try? metadataStore.read(projectID: request.projectID, imageID: id) {
+                            meta.status = .draft
+                            meta.failureReason = nil
+                            try? metadataStore.write(meta)
+                        }
+                    } catch {
+                        let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+                        markFailed(projectID: request.projectID, imageID: id, reason: reason)
                     }
-                } catch {
-                    if var meta = try? metadataStore.read(projectID: request.projectID, imageID: id) {
-                        meta.status = .failed
-                        meta.failureReason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
-                        try? metadataStore.write(meta)
-                    }
+                case .failure(_, let id, let reason):
+                    markFailed(projectID: request.projectID, imageID: id, reason: reason)
                 }
                 onUpdate()
             }
-        } catch {
-            let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
-            for id in slotIDs {
-                if var meta = try? metadataStore.read(projectID: request.projectID, imageID: id) {
-                    meta.status = .failed
-                    meta.failureReason = reason
-                    try? metadataStore.write(meta)
-                }
-            }
-            onUpdate()
-            throw error
+        }
+    }
+
+    private func markFailed(projectID: String, imageID: String, reason: String) {
+        if var meta = try? metadataStore.read(projectID: projectID, imageID: imageID) {
+            meta.status = .failed
+            meta.failureReason = reason
+            try? metadataStore.write(meta)
         }
     }
 

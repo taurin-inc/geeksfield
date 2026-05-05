@@ -158,6 +158,7 @@ struct L10n: Sendable, Equatable {
     var infoCreated: String { t("생성 시각", "Created") }
     var emptyPrompt: String { t("(빈 프롬프트)", "(empty prompt)") }
     var copy: String { "Copy" }
+    var copyImage: String { t("복사하기", "Copy Image") }
     var copied: String { t("복사됨", "Copied") }
 
     // MARK: ReferencePicker
