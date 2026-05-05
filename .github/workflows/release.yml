@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      APP_NAME: Geeksfield
+      APP_NAME: geeksfield
       SCHEME: Geeksfield
       PROJECT: Geeksfield.xcodeproj
       ARCHIVE_PATH: build/Geeksfield.xcarchive
@@ -160,12 +160,47 @@ jobs:
             --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --wait
 
-      - name: Staple and package release asset
+      - name: Staple and package Sparkle update archive
         if: steps.existing_tag.outputs.exists == 'false'
         run: |
           xcrun stapler staple "$EXPORT_PATH/$APP_NAME.app"
           xcrun stapler validate "$EXPORT_PATH/$APP_NAME.app"
           ditto -c -k --keepParent "$EXPORT_PATH/$APP_NAME.app" "build/${APP_NAME}-${{ steps.version.outputs.tag }}.zip"
+
+      - name: Create DMG installer
+        if: steps.existing_tag.outputs.exists == 'false'
+        id: dmg
+        run: |
+          DMG_NAME="${APP_NAME}-${{ steps.version.outputs.tag }}.dmg"
+          DMG_ROOT="$RUNNER_TEMP/dmg-root"
+          rm -rf "$DMG_ROOT"
+          mkdir -p "$DMG_ROOT"
+          cp -R "$EXPORT_PATH/$APP_NAME.app" "$DMG_ROOT/"
+          ln -s /Applications "$DMG_ROOT/Applications"
+          hdiutil create \
+            -volname "$APP_NAME" \
+            -srcfolder "$DMG_ROOT" \
+            -ov \
+            -format UDZO \
+            "build/${DMG_NAME}"
+          echo "asset_name=${DMG_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Notarize DMG installer
+        if: steps.existing_tag.outputs.exists == 'false'
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > "$API_KEY_PATH"
+          xcrun notarytool submit "build/${{ steps.dmg.outputs.asset_name }}" \
+            --key "$API_KEY_PATH" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "build/${{ steps.dmg.outputs.asset_name }}"
+          xcrun stapler validate "build/${{ steps.dmg.outputs.asset_name }}"
 
       - name: Download Sparkle tools
         if: steps.existing_tag.outputs.exists == 'false'
@@ -199,7 +234,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" "build/${{ steps.sparkle.outputs.asset_name }}" \
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "build/${{ steps.dmg.outputs.asset_name }}" \
+            "build/${{ steps.sparkle.outputs.asset_name }}" \
             --target "$GITHUB_SHA" \
             --title "${APP_NAME} ${{ steps.version.outputs.tag }}" \
             --generate-notes

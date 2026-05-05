@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Geeksfield</string>
+	<string>geeksfield</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -28,7 +28,7 @@
 		<false/>
 	</dict>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026 Geeksfield contributors. MIT License.</string>
+	<string>Copyright © 2026 geeksfield contributors. MIT License.</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUEnableInstallerLauncherService</key>
