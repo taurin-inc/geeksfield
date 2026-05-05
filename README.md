@@ -1,15 +1,34 @@
 # geeksfield
 
-로컬 Codex 로그인으로 이미지를 생성·관리하는 macOS 네이티브 앱.
+geeksfield is a native macOS workspace for generating, reviewing, iterating on, and exporting images with a local Codex login.
 
-- macOS 26 Tahoe 이상 (Liquid Glass UI)
-- Swift 6, SwiftUI, Xcode 26+
-- 샌드박스 + Developer ID 서명
-- MIT License
+The app is built with SwiftUI, uses a local-first project store, and is distributed outside the Mac App Store with Developer ID signing, notarization, and Sparkle updates.
 
-## 프로젝트 열기
+## Features
 
-이 레포는 Xcode 프로젝트 파일(`.xcodeproj`)을 커밋하지 않습니다. 대신 [XcodeGen](https://github.com/yonaskolb/XcodeGen)의 `project.yml`에서 생성합니다.
+- Native macOS interface built for image generation workflows.
+- Local Codex authentication via the existing `codex login` session.
+- Project-based storage for generated images, metadata, references, and chat history.
+- Image iteration tools, including inpainting and export workflows.
+- Direct distribution with signed releases, notarized downloads, and automatic updates.
+
+## Requirements
+
+- macOS 26 or later.
+- Xcode 26 or later.
+- Swift 6.
+- XcodeGen for local project generation.
+- A local Codex login for provider-backed generation features.
+
+## Download
+
+Download the latest `geeksfield-vX.Y.Z.dmg` from [GitHub Releases](https://github.com/rapid-studio/geeksfield/releases) and drag `geeksfield.app` into Applications.
+
+The `.dmg` is intended for first-time installs. Sparkle uses the release `.zip` asset for automatic updates after the app is installed.
+
+## Development
+
+This repository does not commit the generated Xcode project. Generate it from `project.yml`:
 
 ```bash
 brew install xcodegen
@@ -17,20 +36,30 @@ xcodegen generate
 open Geeksfield.xcodeproj
 ```
 
-## 상태
+Then sign in to Codex locally if you want to exercise provider-backed generation:
 
-1단계 ~ 3단계 스캐폴딩 완료. 앱을 실행하면 온보딩에서 Codex 로그인을 확인한 뒤 사용 가능한 모델이 드롭다운에 표시됩니다.
+```bash
+codex login
+```
 
-## 모델 연결
+## Release Process
 
-- Codex: 터미널에서 `codex login`으로 로그인하면 앱이 로컬 `~/.codex/auth.json`을 확인해 Codex 이미지 생성을 사용할 수 있습니다.
+Maintainer release steps are documented in [RELEASING.md](RELEASING.md).
 
-이후 단계:
+The automatic update architecture is documented in [docs/updater.md](docs/updater.md).
 
-- 4단계: 3단 레이아웃 · Liquid Glass 적용
-- 5단계: 이미지/채팅 공급자 구현
-- 6단계: 인페인트, 내보내기
+## Project Status
 
-## 구조
+geeksfield is under active development. Public releases may change quickly while the app's generation, editing, and update workflows settle.
 
-자세한 폴더 설명과 설계 원칙은 `docs/`(예정) 및 각 폴더의 `README.md`(예정)를 참고하세요.
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+## Security
+
+Please report security issues according to [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
