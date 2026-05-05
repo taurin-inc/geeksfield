@@ -3,6 +3,10 @@ import ImageIO
 import UniformTypeIdentifiers
 
 struct CodexImageProvider: ImageProvider {
+    private static let requestTimeoutSeconds: UInt64 = 300
+    private static let timeoutRetryCount = 1
+    private static let timeoutMessage = "Codex image generation timed out."
+
     let provider: Provider = .codex
     let endpoint: URL
     let session: URLSession
@@ -100,21 +104,35 @@ struct CodexImageProvider: ImageProvider {
             "include": ["reasoning.encrypted_content"]
         ]
 
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(auth.accountID, forHTTPHeaderField: "ChatGPT-Account-ID")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.setValue("codex_cli_rs", forHTTPHeaderField: "originator")
-        request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "session_id")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        request.timeoutInterval = 180
-        let preparedRequest = request
+        let httpBody = try JSONSerialization.data(withJSONObject: body)
+        var lastError: Error?
+        for attempt in 0...Self.timeoutRetryCount {
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue(auth.accountID, forHTTPHeaderField: "ChatGPT-Account-ID")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+            request.setValue("codex_cli_rs", forHTTPHeaderField: "originator")
+            request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "session_id")
+            request.httpBody = httpBody
+            request.timeoutInterval = TimeInterval(Self.requestTimeoutSeconds + 15)
+            let preparedRequest = request
 
-        return try await withTimeout(seconds: 180) {
-            try await streamImage(for: preparedRequest)
+            do {
+                return try await withTimeout(seconds: Self.requestTimeoutSeconds) {
+                    try await streamImage(for: preparedRequest)
+                }
+            } catch {
+                guard Self.isTimeout(error), attempt < Self.timeoutRetryCount else {
+                    throw error
+                }
+                lastError = error
+                try? await Task.sleep(for: .seconds(2))
+            }
         }
+
+        throw lastError ?? ImageProviderError.emptyResponse
     }
 
     private func streamImage(for request: URLRequest) async throws -> Data {
@@ -383,7 +401,7 @@ struct CodexImageProvider: ImageProvider {
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: seconds * 1_000_000_000)
-                throw ImageProviderError.unsupportedOperation("Codex image generation timed out.")
+                throw ImageProviderError.unsupportedOperation(Self.timeoutMessage)
             }
             guard let value = try await group.next() else {
                 throw ImageProviderError.emptyResponse
@@ -391,5 +409,15 @@ struct CodexImageProvider: ImageProvider {
             group.cancelAll()
             return value
         }
+    }
+
+    private static func isTimeout(_ error: Error) -> Bool {
+        if let urlError = error as? URLError, urlError.code == .timedOut {
+            return true
+        }
+        if case .unsupportedOperation(let message) = error as? ImageProviderError {
+            return message == timeoutMessage
+        }
+        return false
     }
 }
