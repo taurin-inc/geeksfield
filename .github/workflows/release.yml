@@ -171,18 +171,22 @@ jobs:
         if: steps.existing_tag.outputs.exists == 'false'
         id: dmg
         run: |
+          brew install create-dmg
           DMG_NAME="${APP_NAME}-${{ steps.version.outputs.tag }}.dmg"
           DMG_ROOT="$RUNNER_TEMP/dmg-root"
           rm -rf "$DMG_ROOT"
           mkdir -p "$DMG_ROOT"
           cp -R "$EXPORT_PATH/$APP_NAME.app" "$DMG_ROOT/"
-          ln -s /Applications "$DMG_ROOT/Applications"
-          hdiutil create \
-            -volname "$APP_NAME" \
-            -srcfolder "$DMG_ROOT" \
-            -ov \
-            -format UDZO \
-            "build/${DMG_NAME}"
+          create-dmg \
+            --volname "$APP_NAME" \
+            --background "packaging/dmgbg.png" \
+            --window-size 1280 840 \
+            --icon-size 160 \
+            --icon "$APP_NAME.app" 240 340 \
+            --app-drop-link 880 340 \
+            --hide-extension "$APP_NAME.app" \
+            "build/${DMG_NAME}" \
+            "$DMG_ROOT"
           echo "asset_name=${DMG_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Notarize DMG installer
