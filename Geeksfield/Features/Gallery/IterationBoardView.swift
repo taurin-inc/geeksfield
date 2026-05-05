@@ -44,7 +44,7 @@ private struct IterationGroupCard: View {
 
             Text(title)
                 .font(.callout.weight(.semibold))
-                .lineLimit(2)
+                .lineLimit(1)
                 .truncationMode(.tail)
         }
         .padding(6)

@@ -135,7 +135,7 @@ struct ImageDetailInfo: View {
                     infoRow(l10n.infoSeed, "\(seed)")
                 }
                 rowDivider
-                infoRow(l10n.infoCreated, metadata.createdAt.formatted(date: .abbreviated, time: .shortened))
+                infoRow(l10n.infoCreated, l10n.dateTime(metadata.createdAt))
             }
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
