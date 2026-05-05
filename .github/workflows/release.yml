@@ -36,12 +36,51 @@ jobs:
       - name: Resolve version
         id: version
         run: |
-          VERSION="$(ruby -ryaml -e 'puts YAML.load_file("project.yml").dig("settings", "base", "MARKETING_VERSION")')"
-          BUILD="$(ruby -ryaml -e 'puts YAML.load_file("project.yml").dig("settings", "base", "CURRENT_PROJECT_VERSION")')"
-          TAG="v${VERSION}"
+          eval "$(ruby <<'RUBY'
+          require "yaml"
+
+          settings = YAML.load_file("project.yml").dig("settings", "base")
+          base_version = settings.fetch("MARKETING_VERSION")
+          major, minor, patch = base_version.split(".").map(&:to_i)
+
+          remote_tags = `git ls-remote --tags origin "refs/tags/v[0-9]*.[0-9]*.[0-9]*"`
+            .lines
+            .map { |line| line.match(/refs\/tags\/v(\d+)\.(\d+)\.(\d+)$/)&.captures&.map(&:to_i) }
+            .compact
+            .select { |tag_major, tag_minor, _| tag_major == major && tag_minor == minor }
+
+          if remote_tags.empty?
+            version = base_version
+          else
+            latest_patch = remote_tags.map { |_, _, tag_patch| tag_patch }.max
+            version = [major, minor, latest_patch + 1].join(".")
+          end
+
+          build = ENV.fetch("GITHUB_RUN_NUMBER")
+
+          puts "VERSION=#{version}"
+          puts "BUILD=#{build}"
+          puts "TAG=v#{version}"
+          RUBY
+          )"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply release version
+        run: |
+          ruby <<'RUBY'
+          path = "project.yml"
+          version = ENV.fetch("RELEASE_VERSION")
+          build = ENV.fetch("RELEASE_BUILD")
+          text = File.read(path)
+          text = text.sub(/MARKETING_VERSION:\s*"[^"]+"/, %(MARKETING_VERSION: "#{version}"))
+          text = text.sub(/CURRENT_PROJECT_VERSION:\s*"[^"]+"/, %(CURRENT_PROJECT_VERSION: "#{build}"))
+          File.write(path, text)
+          RUBY
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_BUILD: ${{ steps.version.outputs.build }}
 
       - name: Skip existing release tag
         id: existing_tag
