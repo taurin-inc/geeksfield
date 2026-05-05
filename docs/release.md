@@ -46,7 +46,7 @@ Export the Sparkle private key from the local Keychain when registering `SPARKLE
 2. Update `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`.
 3. Open a pull request from `dev` to `main`.
 4. Merge when ready to publish.
-5. Confirm the `Release macOS App` workflow created the GitHub Release and attached `Geeksfield-vX.Y.Z.zip`.
+5. Confirm the `Release macOS App` workflow created the GitHub Release and attached `geeksfield-vX.Y.Z.dmg` and `geeksfield-vX.Y.Z.zip`.
 6. Confirm GitHub Pages published the updated appcast at `https://rapid-studio.github.io/geeksfield/appcast.xml`.
 
 If the version tag already exists, the workflow exits without publishing a duplicate release.
@@ -59,6 +59,6 @@ Protect `main` with these rules when the GitHub plan supports it:
 - Require at least one approving review.
 - Dismiss stale approvals when new commits are pushed.
 - Require conversation resolution before merging.
-- Restrict direct pushes to maintainers or disallow direct pushes entirely, while allowing the release workflow to update `docs/appcast.xml`.
+- Restrict direct pushes to maintainers or disallow direct pushes entirely.
 
-GitHub Pages is configured from `main` branch `/docs`, so release changes that update `docs/appcast.xml` are published at `https://rapid-studio.github.io/geeksfield/appcast.xml`.
+GitHub Pages is configured for GitHub Actions, so the release workflow deploys the generated appcast to `https://rapid-studio.github.io/geeksfield/appcast.xml`.

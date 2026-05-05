@@ -1,4 +1,4 @@
-# Geeksfield
+# geeksfield
 
 로컬 Codex 로그인으로 이미지를 생성·관리하는 macOS 네이티브 앱.
 

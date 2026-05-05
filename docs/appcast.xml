@@ -3,9 +3,9 @@
      xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
      xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
-    <title>Geeksfield Updates</title>
+    <title>geeksfield Updates</title>
     <link>https://rapid-studio.github.io/geeksfield/appcast.xml</link>
-    <description>Geeksfield release feed for Sparkle updates.</description>
+    <description>geeksfield release feed for Sparkle updates.</description>
     <language>en</language>
     <item>
       <title>Version 0.1.0</title>

@@ -1,6 +1,6 @@
 # Auto Updates
 
-Geeksfield should use Sparkle 2 for direct macOS distribution outside the Mac App Store.
+geeksfield should use Sparkle 2 for direct macOS distribution outside the Mac App Store.
 
 The app uses Sparkle 2 through the `AutoUpdater` abstraction and UI hooks for "Check for Updates".
 
@@ -9,16 +9,16 @@ The app uses Sparkle 2 through the `AutoUpdater` abstraction and UI hooks for "C
 - Sparkle 2 package dependency.
 - `SUFeedURL` in the app Info.plist.
 - `SUPublicEDKey` in the app Info.plist.
-- `SUEnableInstallerLauncherService` in the app Info.plist because Geeksfield is sandboxed.
-- Sparkle mach lookup temporary exceptions in the app entitlements because Geeksfield is sandboxed.
-- A release asset URL that points directly to the downloadable zip or dmg.
+- `SUEnableInstallerLauncherService` in the app Info.plist because geeksfield is sandboxed.
+- Sparkle mach lookup temporary exceptions in the app entitlements because geeksfield is sandboxed.
+- A Sparkle update asset URL that points directly to the downloadable zip.
 - A signed appcast XML feed that includes the version, build number, asset length, and Sparkle EdDSA signature.
 
 Sparkle's documentation recommends HTTPS appcast hosting, Developer ID code signing, Apple notarization, and EdDSA signing for update archives.
 
 ## Recommended Hosting
 
-GitHub Pages is configured to publish from `main` branch `/docs`.
+GitHub Pages is configured to publish from GitHub Actions.
 
 The appcast URL is:
 
@@ -30,12 +30,13 @@ The source file is `docs/appcast.xml`.
 
 ## Release Flow
 
-1. The `main` branch release workflow builds and notarizes `Geeksfield.app`.
-2. The workflow packages the stapled app as `Geeksfield-vX.Y.Z.zip`.
-3. The workflow signs the archive with Sparkle's private EdDSA key.
-4. The workflow updates `appcast.xml` with the new release item.
-5. The workflow creates the GitHub Release and uploads the zip.
-6. Installed apps check `SUFeedURL`, verify the EdDSA signature using `SUPublicEDKey`, and offer the update.
+1. The `main` branch release workflow builds and notarizes `geeksfield.app`.
+2. The workflow packages the stapled app as `geeksfield-vX.Y.Z.zip` for Sparkle updates.
+3. The workflow creates and notarizes `geeksfield-vX.Y.Z.dmg` for first-time installs.
+4. The workflow signs the zip with Sparkle's private EdDSA key.
+5. The workflow creates the GitHub Release and uploads both the dmg and zip.
+6. The workflow updates `appcast.xml` with the zip asset and deploys it to GitHub Pages.
+7. Installed apps check `SUFeedURL`, verify the EdDSA signature using `SUPublicEDKey`, and offer the update.
 
 ## Secrets
 

@@ -29,7 +29,7 @@ struct OnboardingView: View {
                 .symbolRenderingMode(.hierarchical)
 
             VStack(spacing: 6) {
-                Text("Geeksfield")
+                Text("geeksfield")
                     .font(.system(size: 34, weight: .semibold, design: .rounded))
                 Text(appState.l10n.onboardingSubtitle)
                     .font(.body)
