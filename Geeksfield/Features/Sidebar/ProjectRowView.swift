@@ -3,6 +3,7 @@ import SwiftUI
 struct ProjectRowView: View {
     let project: Project
     let imageCount: Int
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         HStack(spacing: 10) {
@@ -15,7 +16,7 @@ struct ProjectRowView: View {
                 Text(project.name)
                     .font(.body)
                     .lineLimit(1)
-                Text(project.updatedAt.formatted(.relative(presentation: .named)))
+                Text(appState.l10n.relativeDate(project.updatedAt))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

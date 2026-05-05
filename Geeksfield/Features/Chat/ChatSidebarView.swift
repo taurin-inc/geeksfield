@@ -111,6 +111,7 @@ struct ChatSidebarView: View {
 
 private struct ChatMessageBubble: View {
     let message: ChatMessage
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -148,7 +149,7 @@ private struct ChatMessageBubble: View {
     @ViewBuilder
     private var metaRow: some View {
         HStack(spacing: 6) {
-            Text(message.createdAt.formatted(date: .omitted, time: .shortened))
+            Text(appState.l10n.time(message.createdAt))
             if message.role == .assistant, let model = message.modelID {
                 Text("·")
                 Text(model)

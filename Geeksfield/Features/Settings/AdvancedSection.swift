@@ -20,7 +20,7 @@ struct AdvancedSection: View {
                     HStack {
                         Text(l10n.lastRefreshed)
                         Spacer()
-                        Text(when.formatted(date: .abbreviated, time: .shortened))
+                        Text(appState.l10n.dateTime(when))
                             .foregroundStyle(.secondary)
                     }
                     .font(.callout)

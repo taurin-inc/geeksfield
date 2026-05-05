@@ -140,15 +140,6 @@ struct SidebarView: View {
             }
             .buttonStyle(.glass)
             .help(appState.l10n.settings)
-
-            Spacer()
-
-            HStack(spacing: 8) {
-                providerDot(.codex)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.quaternary, in: Capsule())
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
