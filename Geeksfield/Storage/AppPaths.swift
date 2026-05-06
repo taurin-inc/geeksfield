@@ -32,6 +32,7 @@ struct AppPaths: Sendable {
     var catalogDir: URL { root.appendingPathComponent("catalog", isDirectory: true) }
     var appJSON: URL { root.appendingPathComponent("app.json") }
     var chatLog: URL { chatDir.appendingPathComponent("messages.jsonl") }
+    var chatAttachmentsDir: URL { chatDir.appendingPathComponent("attachments", isDirectory: true) }
     var catalogCacheFile: URL { catalogDir.appendingPathComponent("model_catalog.json") }
 
     func projectRoot(_ projectID: String) -> URL {
@@ -68,7 +69,7 @@ struct AppPaths: Sendable {
 
     func ensureSkeleton() throws {
         let fm = FileManager.default
-        for dir in [projectsDir, chatDir, catalogDir] {
+        for dir in [projectsDir, chatDir, chatAttachmentsDir, catalogDir] {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         }
     }

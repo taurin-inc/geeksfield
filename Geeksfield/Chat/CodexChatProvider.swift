@@ -1,13 +1,15 @@
 import Foundation
 
 struct CodexChatProvider: ChatProvider {
+    static let defaultEndpoint = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
+
     let provider: Provider = .codex
     let endpoint: URL
     let session: URLSession
     let authStore: CodexAuthStore
 
     init(
-        endpoint: URL = URL(string: "https://chatgpt.com/backend-api/codex/responses")!,
+        endpoint: URL = CodexChatProvider.defaultEndpoint,
         session: URLSession = .shared,
         authStore: CodexAuthStore = CodexAuthStore()
     ) {
@@ -20,6 +22,7 @@ struct CodexChatProvider: ChatProvider {
         _ = apiKey
         let auth = try authStore.load()
         let prompt = Self.transcript(from: messages)
+        let inputContent = try Self.messageContent(prompt: prompt, attachments: messages.last?.attachments ?? [])
         let body: [String: Any] = [
             "model": modelID,
             "instructions": "You are a concise assistant inside an image generation workspace.",
@@ -27,9 +30,7 @@ struct CodexChatProvider: ChatProvider {
                 [
                     "type": "message",
                     "role": "user",
-                    "content": [
-                        ["type": "input_text", "text": prompt]
-                    ]
+                    "content": inputContent
                 ]
             ],
             "parallel_tool_calls": false,
@@ -132,9 +133,26 @@ struct CodexChatProvider: ChatProvider {
 
     private static func transcript(from messages: [ChatMessage]) -> String {
         messages.suffix(24).map { message in
-            "\(roleLabel(message.role)): \(message.content)"
+            let attachmentLabel = message.attachments.isEmpty ? "" : " [\(message.attachments.count) image attachment(s)]"
+            return "\(roleLabel(message.role)): \(message.content)\(attachmentLabel)"
         }
         .joined(separator: "\n\n")
+    }
+
+    private static func messageContent(prompt: String, attachments: [ChatAttachment]) throws -> [[String: Any]] {
+        var content: [[String: Any]] = [
+            ["type": "input_text", "text": prompt]
+        ]
+        for attachment in attachments {
+            let url = URL(fileURLWithPath: attachment.path)
+            let data = try Data(contentsOf: url)
+            let mimeType = attachment.mimeType.isEmpty ? "image/png" : attachment.mimeType
+            content.append([
+                "type": "input_image",
+                "image_url": "data:\(mimeType);base64,\(data.base64EncodedString())"
+            ])
+        }
+        return content
     }
 
     private static func roleLabel(_ role: ChatRole) -> String {
