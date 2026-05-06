@@ -40,6 +40,7 @@ final class AppState {
     var selectedImageModel: ModelDescriptor?
     var selectedChatModel: ModelDescriptor?
     var activeBaseImageID: String?
+    var focusedInput: FocusedInput?
     var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "geeksfield.onboarding.completed")
     var language: Language = {
         let raw = UserDefaults.standard.string(forKey: "geeksfield.language") ?? Language.korean.rawValue
@@ -390,6 +391,34 @@ final class AppState {
         }
     }
 
+    func attachExternalReference(data: Data, preferredExtension: String = "png") {
+        guard let pid = selectedProjectID else { return }
+        do {
+            let refID = try referenceStore.ingestData(
+                projectID: pid,
+                data: data,
+                preferredExtension: preferredExtension
+            )
+            pendingReferenceIDs.append(refID)
+        } catch {
+            errorBus.report(error, title: l10n.referenceAddFailed)
+        }
+    }
+
+    func makeChatAttachment(data: Data, preferredExtension: String = "png") -> ChatAttachment? {
+        do {
+            try AppPaths.shared.ensureSkeleton()
+            let id = "chat_" + UUID().uuidString.lowercased()
+            let ext = preferredExtension.isEmpty ? "png" : preferredExtension
+            let url = AppPaths.shared.chatAttachmentsDir.appendingPathComponent("\(id).\(ext)")
+            try data.write(to: url, options: .atomic)
+            return ChatAttachment(id: id, mimeType: "image/\(ext == "jpg" ? "jpeg" : ext)", path: url.path)
+        } catch {
+            errorBus.report(error, title: l10n.referenceAddFailed)
+            return nil
+        }
+    }
+
     func removeReference(id: String) {
         pendingReferenceIDs.removeAll { $0 == id }
     }
@@ -647,4 +676,9 @@ final class AppState {
             isChatBusy = false
         }
     }
+}
+
+enum FocusedInput: Hashable {
+    case prompt
+    case chat
 }

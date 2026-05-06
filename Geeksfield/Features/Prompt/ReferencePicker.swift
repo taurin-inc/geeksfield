@@ -159,13 +159,7 @@ struct ReferencePicker: View {
     @ViewBuilder
     private func thumbImage(url: URL?) -> some View {
         if let url {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else {
-                    Color.secondary.opacity(0.1)
-                }
-            }
+            LocalImage(url: url, contentMode: .fill)
         } else {
             Color.secondary.opacity(0.1)
         }
