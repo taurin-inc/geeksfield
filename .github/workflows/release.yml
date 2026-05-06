@@ -211,18 +211,47 @@ jobs:
         id: dmg
         run: |
           brew install create-dmg
+          CREATE_DMG_WORKDIR="$RUNNER_TEMP/create-dmg"
+          rm -rf "$CREATE_DMG_WORKDIR"
+          mkdir -p "$CREATE_DMG_WORKDIR/support"
+          cp "$(command -v create-dmg)" "$CREATE_DMG_WORKDIR/create-dmg"
+          cp -R "$(brew --prefix create-dmg)/share/create-dmg/support/." "$CREATE_DMG_WORKDIR/support/"
+          touch "$CREATE_DMG_WORKDIR/.this-is-the-create-dmg-repo"
+          chmod +x "$CREATE_DMG_WORKDIR/create-dmg"
+          CREATE_DMG_TEMPLATE="$CREATE_DMG_WORKDIR/support/template.applescript"
+          perl -0pi -e 's/set statusbar visible to false/set toolbar visible to false\n\t\t\t\tset statusbar visible to false\n\t\t\t\tset pathbar visible to false/g' "$CREATE_DMG_TEMPLATE"
           DMG_NAME="${APP_NAME}-${{ steps.version.outputs.tag }}.dmg"
           DMG_ROOT="$RUNNER_TEMP/dmg-root"
+          BG_WIDTH="$(sips -g pixelWidth packaging/dmgbg.png | awk '/pixelWidth/ {print $2}')"
+          BG_HEIGHT="$(sips -g pixelHeight packaging/dmgbg.png | awk '/pixelHeight/ {print $2}')"
+          ICON_SIZE="$((BG_WIDTH / 8))"
+          ICON_Y="$((BG_HEIGHT / 2))"
+          APP_ICON_X="$((BG_WIDTH / 4))"
+          APPLICATIONS_ICON_X="$((BG_WIDTH * 3 / 4))"
           rm -rf "$DMG_ROOT"
           mkdir -p "$DMG_ROOT"
           cp -R "$EXPORT_PATH/$APP_NAME.app" "$DMG_ROOT/"
-          create-dmg \
+          osascript <<APPLESCRIPT
+          tell application "Finder"
+            make new alias file to POSIX file "/Applications" at POSIX file "$DMG_ROOT" with properties {name:"Applications"}
+          end tell
+          APPLESCRIPT
+          APPLICATIONS_ICON="/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ApplicationsFolderIcon.icns"
+          APPLICATIONS_ICON_RSRC="$RUNNER_TEMP/applications-icon.r"
+          {
+            printf "data 'icns' (-16455) {\n"
+            xxd -p -c 256 "$APPLICATIONS_ICON" | sed 's/^/  $"/; s/$/"/'
+            printf "};\n"
+          } > "$APPLICATIONS_ICON_RSRC"
+          Rez -append "$APPLICATIONS_ICON_RSRC" -o "$DMG_ROOT/Applications"
+          SetFile -a C "$DMG_ROOT/Applications"
+          "$CREATE_DMG_WORKDIR/create-dmg" \
             --volname "$APP_NAME" \
             --background "packaging/dmgbg.png" \
-            --window-size 1280 840 \
-            --icon-size 160 \
-            --icon "$APP_NAME.app" 240 340 \
-            --app-drop-link 880 340 \
+            --window-size "$BG_WIDTH" "$BG_HEIGHT" \
+            --icon-size "$ICON_SIZE" \
+            --icon "$APP_NAME.app" "$APP_ICON_X" "$ICON_Y" \
+            --icon "Applications" "$APPLICATIONS_ICON_X" "$ICON_Y" \
             --hide-extension "$APP_NAME.app" \
             "build/${DMG_NAME}" \
             "$DMG_ROOT"
