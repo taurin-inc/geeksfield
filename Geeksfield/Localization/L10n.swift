@@ -136,6 +136,9 @@ struct L10n: Sendable, Equatable {
     var codexLoginRequired: String { t("Codex 로그인 필요", "Codex login required") }
     var showChatPanel: String { t("대화 패널 보이기", "Show chat panel") }
     var hideChatPanel: String { t("대화 패널 숨기기", "Hide chat panel") }
+    var chats: String { t("채팅", "Chats") }
+    var newChat: String { t("새 채팅", "New Chat") }
+    var chatHistory: String { t("채팅 목록", "Chat history") }
     var startConversation: String { t("무엇을 만들지 함께 정리해보세요", "Shape what to create next") }
     var chooseModelThenMessage: String { t("메시지를 입력하세요.", "Enter a message.") }
     var message: String { t("메시지", "Message") }
