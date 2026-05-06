@@ -32,6 +32,7 @@ open Geeksfield.xcodeproj
 
 - `dev` = 통합 브랜치. 모든 기능/수정 PR은 `dev`를 base로 엽니다.
 - `main` = 릴리스 전용. push 시 GitHub Actions release 워크플로가 트리거됩니다.
+- `main`을 base로 한 PR이 `dev`에서 오지 않은 경우 [`.github/workflows/main-pr-gate.yml`](.github/workflows/main-pr-gate.yml)이 자동으로 닫습니다. 즉 feature 브랜치 → `main` 직행은 차단됩니다.
 - 머지 방식은 squash merge만 허용 (`main` branch ruleset).
 - PR 본문에는 [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md)의 verification 체크리스트를 채우세요.
 
