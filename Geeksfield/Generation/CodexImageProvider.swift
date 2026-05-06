@@ -6,6 +6,7 @@ struct CodexImageProvider: ImageProvider {
     private static let requestTimeoutSeconds: UInt64 = 300
     private static let timeoutRetryCount = 1
     private static let timeoutMessage = "Codex image generation timed out."
+    static let defaultEndpoint = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
 
     let provider: Provider = .codex
     let endpoint: URL
@@ -13,7 +14,7 @@ struct CodexImageProvider: ImageProvider {
     let authStore: CodexAuthStore
 
     init(
-        endpoint: URL = URL(string: "https://chatgpt.com/backend-api/codex/responses")!,
+        endpoint: URL = CodexImageProvider.defaultEndpoint,
         session: URLSession = .shared,
         authStore: CodexAuthStore = CodexAuthStore()
     ) {
@@ -30,16 +31,24 @@ struct CodexImageProvider: ImageProvider {
             size: request.size,
             aspectRatio: request.aspectRatio
         )
-        var results: [Data] = []
-        for _ in 0..<count {
-            let image = try await requestImage(prompt: prompt, images: referenceImages, modelID: request.model.id)
-            results.append(ImageOutputNormalizer.normalizedPNG(
-                image,
-                size: request.size,
-                aspectRatio: request.aspectRatio
-            ))
+        let modelID = request.model.id
+        let size = request.size
+        let aspectRatio = request.aspectRatio
+
+        return try await withThrowingTaskGroup(of: (Int, Data).self) { group in
+            for index in 0..<count {
+                group.addTask {
+                    let image = try await requestImage(prompt: prompt, images: referenceImages, modelID: modelID)
+                    let normalized = ImageOutputNormalizer.normalizedPNG(image, size: size, aspectRatio: aspectRatio)
+                    return (index, normalized)
+                }
+            }
+            var ordered = Array<Data?>(repeating: nil, count: count)
+            for try await (index, data) in group {
+                ordered[index] = data
+            }
+            return ordered.compactMap { $0 }
         }
-        return results
     }
 
     func edit(request: InpaintRequest, originalPNG: Data, maskPNG: Data, apiKey: String) async throws -> Data {

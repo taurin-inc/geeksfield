@@ -1,13 +1,15 @@
 import Foundation
 
 struct CodexChatProvider: ChatProvider {
+    static let defaultEndpoint = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
+
     let provider: Provider = .codex
     let endpoint: URL
     let session: URLSession
     let authStore: CodexAuthStore
 
     init(
-        endpoint: URL = URL(string: "https://chatgpt.com/backend-api/codex/responses")!,
+        endpoint: URL = CodexChatProvider.defaultEndpoint,
         session: URLSession = .shared,
         authStore: CodexAuthStore = CodexAuthStore()
     ) {
