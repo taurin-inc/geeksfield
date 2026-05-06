@@ -7,8 +7,11 @@ This project publishes direct-distribution macOS releases through GitHub Actions
 - `dev` is the integration branch for regular development.
 - Feature and fix branches should open pull requests into `dev`.
 - `main` is the release branch.
+- Only `dev` may be merged into `main`.
 - Merge `dev` into `main` only when a public release should be produced.
 - The release workflow runs on pushes to `main`.
+- Feature and fix branches merged into `dev` are deleted automatically by the dev branch cleanup workflow.
+- The repository-level automatic head branch deletion setting must stay disabled so `dev` is not deleted after `dev` -> `main` release PRs.
 
 ## Versioning
 

@@ -33,7 +33,7 @@ struct ChatSidebarView: View {
     }
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 8) {
             Button {
                 isPresented = false
             } label: {
@@ -45,8 +45,43 @@ struct ChatSidebarView: View {
             .buttonStyle(.plain)
             .help(appState.l10n.hideChatPanel)
 
-            Spacer()
+            Menu {
+                ForEach(appState.chatSessions) { session in
+                    Button {
+                        appState.selectChatSession(session)
+                    } label: {
+                        HStack {
+                            Text(session.title)
+                            if session.id == appState.activeChatSessionID {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(appState.activeChatSession?.title ?? appState.l10n.newChat)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .help(appState.l10n.chatHistory)
+
+            Button {
+                appState.startNewChat()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .disabled(appState.chatMessages.isEmpty)
+            .help(appState.l10n.newChat)
         }
+        .font(.callout.weight(.semibold))
         .padding(.horizontal, 12)
         .padding(.top, 12)
         .padding(.bottom, 8)
@@ -63,16 +98,26 @@ struct ChatSidebarView: View {
                             ChatMessageBubble(message: message)
                                 .id(message.id)
                         }
+                        if appState.isChatBusy {
+                            ChatTypingIndicator()
+                                .id(typingIndicatorID)
+                        }
                     }
                 }
                 .padding(12)
             }
+            .onAppear {
+                scrollToBottom(proxy, animated: false)
+            }
+            .onChange(of: isPresented) { _, visible in
+                guard visible else { return }
+                scrollToBottom(proxy, animated: false)
+            }
+            .onChange(of: appState.activeChatSessionID) { _, _ in
+                scrollToBottom(proxy, animated: false)
+            }
             .onChange(of: appState.chatMessages.count) { _, _ in
-                if let last = appState.chatMessages.last {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
-                }
+                scrollToBottom(proxy, animated: true)
             }
         }
     }
@@ -176,6 +221,10 @@ struct ChatSidebarView: View {
         .systemFont(ofSize: NSFont.systemFontSize(for: .regular))
     }
 
+    private var typingIndicatorID: String {
+        "chat-typing-indicator"
+    }
+
     private func submit() {
         guard let model = appState.defaultChatModel else {
             appState.errorBus.report(
@@ -267,6 +316,63 @@ struct ChatSidebarView: View {
             NSEvent.removeMonitor(commandReturnMonitor)
             self.commandReturnMonitor = nil
         }
+    }
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
+        let targetID: AnyHashable
+        if appState.isChatBusy {
+            targetID = AnyHashable(typingIndicatorID)
+        } else if let last = appState.chatMessages.last {
+            targetID = AnyHashable(last.id)
+        } else {
+            return
+        }
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(targetID, anchor: .bottom)
+                }
+            } else {
+                proxy.scrollTo(targetID, anchor: .bottom)
+            }
+        }
+    }
+}
+
+private struct ChatTypingIndicator: View {
+    @State private var phase = 0
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            typingBubble
+            Spacer(minLength: 32)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.46).repeatForever(autoreverses: true)) {
+                phase = 1
+            }
+        }
+    }
+
+    private var typingBubble: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Color.secondary.opacity(0.75))
+                    .frame(width: 5, height: 5)
+                    .scaleEffect(phase == 1 ? 1.0 : 0.62)
+                    .opacity(phase == 1 ? 1.0 : 0.38)
+                    .animation(
+                        .easeInOut(duration: 0.46)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(index) * 0.13),
+                        value: phase
+                    )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

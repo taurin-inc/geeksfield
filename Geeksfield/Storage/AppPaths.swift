@@ -33,7 +33,12 @@ struct AppPaths: Sendable {
     var appJSON: URL { root.appendingPathComponent("app.json") }
     var chatLog: URL { chatDir.appendingPathComponent("messages.jsonl") }
     var chatAttachmentsDir: URL { chatDir.appendingPathComponent("attachments", isDirectory: true) }
+    var chatSessionsIndex: URL { chatDir.appendingPathComponent("sessions.json") }
     var catalogCacheFile: URL { catalogDir.appendingPathComponent("model_catalog.json") }
+
+    func chatSessionLog(_ sessionID: String) -> URL {
+        chatDir.appendingPathComponent("\(sessionID).jsonl")
+    }
 
     func projectRoot(_ projectID: String) -> URL {
         projectsDir.appendingPathComponent(projectID, isDirectory: true)

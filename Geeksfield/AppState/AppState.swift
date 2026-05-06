@@ -26,13 +26,14 @@ final class AppState {
 
     @ObservationIgnored
     private lazy var chatOrchestrator = ChatOrchestrator(
-        log: chatLog,
         keychain: keychain
     )
 
     var projects: [Project] = []
     var selectedProjectID: String?
     var assetsByProject: [String: [ImageAsset]] = [:]
+    var chatSessions: [ChatSession] = []
+    var activeChatSessionID: String?
     var chatMessages: [ChatMessage] = []
     var isChatBusy: Bool = false
     var pendingReferenceIDs: [String] = []
@@ -58,6 +59,10 @@ final class AppState {
     private let lastImageIDKey = "geeksfield.lastImage.id"
     private let lastChatProviderKey = "geeksfield.lastChat.provider"
     private let lastChatIDKey = "geeksfield.lastChat.id"
+    private let lastChatSessionIDKey = "geeksfield.lastChatSession.id"
+    private let chatAutoSplitInterval: TimeInterval = 12 * 60 * 60
+    private let chatAutoSplitMessageCount = 48
+    private let chatAutoSplitCharacterCount = 16_000
     private let stalePendingInterval: TimeInterval = 20 * 60
 
     var connectedProviders: Set<Provider> {
@@ -85,6 +90,11 @@ final class AppState {
         selectedChatModel ?? selectedImageModel ?? modelRegistry.imageModels.first
     }
 
+    var activeChatSession: ChatSession? {
+        guard let activeChatSessionID else { return nil }
+        return chatSessions.first { $0.id == activeChatSessionID }
+    }
+
     var activeBaseAsset: ImageAsset? {
         guard let activeBaseImageID else { return nil }
         return selectedProjectAssets.first { $0.id == activeBaseImageID }
@@ -94,7 +104,7 @@ final class AppState {
 
     func bootstrap() async {
         reloadProjects()
-        chatMessages = (try? chatLog.readAll()) ?? []
+        reloadChatSessions()
         autoUpdater.checkForUpdatesInBackground()
         await modelRegistry.refresh()
         restoreModelSelections()
@@ -646,7 +656,60 @@ final class AppState {
 
     // MARK: - Chat
 
+    func reloadChatSessions() {
+        do {
+            chatSessions = try chatLog.loadSessions()
+            pruneEmptyChatSessions()
+
+            let defaults = UserDefaults.standard
+            let storedID = defaults.string(forKey: lastChatSessionIDKey)
+            let nextID = if let storedID, chatSessions.contains(where: { $0.id == storedID }) {
+                storedID
+            } else {
+                chatSessions.first?.id
+            }
+            selectChatSession(id: nextID)
+            startNewChatIfNeeded(reason: .appLaunch)
+        } catch {
+            errorBus.report(error, title: "Failed to load chats")
+            chatSessions = []
+            beginDraftChat()
+        }
+    }
+
+    func startNewChat() {
+        beginDraftChat()
+    }
+
+    private func startNewChatIfNeeded(reason: ChatAutoStartReason) {
+        guard let session = activeChatSession,
+              !chatMessages.isEmpty,
+              shouldStartNewChat(session: session, messages: chatMessages, reason: reason) else { return }
+        beginDraftChat()
+    }
+
+    func selectChatSession(_ session: ChatSession) {
+        selectChatSession(id: session.id)
+    }
+
+    private func selectChatSession(id: String?) {
+        guard let id else {
+            beginDraftChat()
+            return
+        }
+        do {
+            activeChatSessionID = id
+            chatMessages = try chatLog.readMessages(for: id)
+            UserDefaults.standard.set(id, forKey: lastChatSessionIDKey)
+        } catch {
+            errorBus.report(error, title: "Failed to load chat")
+        }
+    }
+
     func sendChat(text: String, model: ModelDescriptor, attachments: [ChatAttachment] = []) {
+        startNewChatIfNeeded(reason: .beforeSend)
+        guard let sessionID = ensurePersistedChatSessionForSend() else { return }
+
         let userMessage = ChatMessage(
             id: UUID().uuidString.lowercased(),
             role: .user,
@@ -657,6 +720,8 @@ final class AppState {
             attachments: attachments
         )
         chatMessages.append(userMessage)
+        persistChatMessage(userMessage, sessionID: sessionID)
+        updateActiveChatSession(after: userMessage)
         isChatBusy = true
 
         let history = chatMessages.dropLast().filter { $0.role != .system }
@@ -669,13 +734,131 @@ final class AppState {
                     userMessage: userMessage,
                     model: model
                 )
-                chatMessages.append(reply)
+                persistChatMessage(reply, sessionID: sessionID)
+                if activeChatSessionID == sessionID {
+                    chatMessages.append(reply)
+                }
+                updateChatSession(sessionID: sessionID, after: reply)
+                if historyArray.isEmpty {
+                    generateChatTitle(for: sessionID, userMessage: userMessage, reply: reply, model: model)
+                }
             } catch {
                 errorBus.report(error, title: "Chat failed")
             }
             isChatBusy = false
         }
     }
+
+    private func persistChatMessage(_ message: ChatMessage, sessionID: String) {
+        do {
+            try chatLog.append(message, to: sessionID)
+        } catch {
+            errorBus.report(error, title: "Failed to save chat")
+        }
+    }
+
+    private func ensurePersistedChatSessionForSend() -> String? {
+        if let activeChatSessionID {
+            return activeChatSessionID
+        }
+        do {
+            let session = try chatLog.createSession(title: l10n.newChat)
+            chatSessions.insert(session, at: 0)
+            activeChatSessionID = session.id
+            UserDefaults.standard.set(session.id, forKey: lastChatSessionIDKey)
+            return session.id
+        } catch {
+            errorBus.report(error, title: "Failed to create chat")
+            return nil
+        }
+    }
+
+    private func beginDraftChat() {
+        activeChatSessionID = nil
+        chatMessages = []
+        UserDefaults.standard.removeObject(forKey: lastChatSessionIDKey)
+    }
+
+    private func pruneEmptyChatSessions() {
+        let nonEmptySessions = chatSessions.filter { session in
+            ((try? chatLog.readMessages(for: session.id)) ?? []).isEmpty == false
+        }
+        guard nonEmptySessions.count != chatSessions.count else { return }
+        chatSessions = nonEmptySessions
+        do {
+            try chatLog.saveSessions(chatSessions)
+        } catch {
+            errorBus.report(error, title: "Failed to save chats")
+        }
+    }
+
+    private func updateActiveChatSession(after message: ChatMessage) {
+        guard let activeChatSessionID else { return }
+        updateChatSession(sessionID: activeChatSessionID, after: message)
+    }
+
+    private func updateChatSession(sessionID: String, after message: ChatMessage) {
+        guard let index = chatSessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        chatSessions[index].updatedAt = message.createdAt
+        chatSessions.sort { $0.updatedAt > $1.updatedAt }
+        do {
+            try chatLog.saveSessions(chatSessions)
+        } catch {
+            errorBus.report(error, title: "Failed to save chats")
+        }
+    }
+
+    private func generateChatTitle(
+        for sessionID: String,
+        userMessage: ChatMessage,
+        reply: ChatMessage,
+        model: ModelDescriptor
+    ) {
+        Task {
+            let fallback = fallbackChatTitle(from: reply.content)
+            let generated = try? await chatOrchestrator.generateTitle(
+                userMessage: userMessage,
+                assistantMessage: reply,
+                model: model
+            )
+            let title = generated?.isEmpty == false ? generated! : fallback
+            setChatSessionTitle(title, sessionID: sessionID)
+        }
+    }
+
+    private func setChatSessionTitle(_ title: String, sessionID: String) {
+        guard let index = chatSessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        chatSessions[index].title = title
+        do {
+            try chatLog.saveSessions(chatSessions)
+        } catch {
+            errorBus.report(error, title: "Failed to save chats")
+        }
+    }
+
+    private func fallbackChatTitle(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
+        let title = firstLine.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`*_# "))
+        return title.isEmpty ? l10n.newChat : String(title.prefix(34))
+    }
+
+    private func shouldStartNewChat(
+        session: ChatSession,
+        messages: [ChatMessage],
+        reason: ChatAutoStartReason
+    ) -> Bool {
+        if reason == .appLaunch { return true }
+        if Date().timeIntervalSince(session.updatedAt) > chatAutoSplitInterval { return true }
+        if messages.count >= chatAutoSplitMessageCount { return true }
+        let characterCount = messages.reduce(0) { $0 + $1.content.count }
+        return characterCount >= chatAutoSplitCharacterCount
+    }
+}
+
+private enum ChatAutoStartReason {
+    case appLaunch
+    case beforeSend
 }
 
 enum FocusedInput: Hashable {

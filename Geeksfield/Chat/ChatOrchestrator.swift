@@ -3,18 +3,15 @@ import Foundation
 @MainActor
 final class ChatOrchestrator {
     let providers: [Provider: any ChatProvider]
-    let log: ChatLogStore
     let keychain: KeychainStore
 
     init(
         providers: [Provider: any ChatProvider] = [
             .codex: CodexChatProvider()
         ],
-        log: ChatLogStore = ChatLogStore(),
         keychain: KeychainStore = KeychainStore()
     ) {
         self.providers = providers
-        self.log = log
         self.keychain = keychain
     }
 
@@ -31,15 +28,64 @@ final class ChatOrchestrator {
             throw ChatOrchestratorError.missingAPIKey(model.provider)
         }
 
-        try? log.append(userMessage)
-
         let reply = try await provider.send(
             messages: history + [userMessage],
             modelID: model.id,
             apiKey: apiKey
         )
-        try? log.append(reply)
         return reply
+    }
+
+    func generateTitle(
+        userMessage: ChatMessage,
+        assistantMessage: ChatMessage,
+        model: ModelDescriptor
+    ) async throws -> String {
+        guard let provider = providers[model.provider] else {
+            throw ChatOrchestratorError.unsupportedProvider(model.provider)
+        }
+        let apiKey = keychain.apiKey(for: model.provider) ?? ""
+        guard !model.provider.usesAPIKey || !apiKey.isEmpty else {
+            throw ChatOrchestratorError.missingAPIKey(model.provider)
+        }
+
+        let prompt = """
+        Create a concise chat title for this conversation.
+        Rules:
+        - Return only the title.
+        - Use the same language as the conversation.
+        - Do not quote the user's message verbatim.
+        - Keep it under 8 words.
+
+        User:
+        \(userMessage.content)
+
+        Assistant:
+        \(assistantMessage.content)
+        """
+        let titleRequest = ChatMessage(
+            id: UUID().uuidString.lowercased(),
+            role: .user,
+            content: prompt,
+            createdAt: Date(),
+            provider: model.provider,
+            modelID: model.id,
+            attachments: []
+        )
+        let reply = try await provider.send(messages: [titleRequest], modelID: model.id, apiKey: apiKey)
+        return sanitizeTitle(reply.content)
+    }
+
+    private func sanitizeTitle(_ title: String) -> String {
+        let trimmed = title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`*_# "))
+        let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
+        let sentence = firstLine
+            .replacingOccurrences(of: "Title:", with: "")
+            .replacingOccurrences(of: "제목:", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(sentence.prefix(40))
     }
 }
 
