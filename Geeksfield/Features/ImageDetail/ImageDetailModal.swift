@@ -8,6 +8,7 @@ struct ImageThreadWorkspaceView: View {
     @Environment(AppState.self) private var appState
     @State private var inpaintOpen = false
     @State private var failedAsset: ImageAsset?
+    @State private var previewAsset: ImageAsset?
 
     private var currentAsset: ImageAsset {
         appState.presentedAsset ?? asset
@@ -27,6 +28,9 @@ struct ImageThreadWorkspaceView: View {
         .sheet(isPresented: $inpaintOpen) {
             InpaintSheet(asset: currentAsset)
                 .environment(appState)
+        }
+        .sheet(item: $previewAsset) { asset in
+            ImagePreviewSheet(asset: asset)
         }
         .failedImageAlert(asset: $failedAsset, dismissPresentedAsset: true)
     }
@@ -125,9 +129,6 @@ struct ImageThreadWorkspaceView: View {
                 .onAppear {
                     proxy.scrollTo(currentAsset.id, anchor: .center)
                 }
-                .onChange(of: currentAsset.id) { _, _ in
-                    proxy.scrollTo(currentAsset.id, anchor: .center)
-                }
             }
         }
     }
@@ -158,6 +159,10 @@ struct ImageThreadWorkspaceView: View {
     private func select(_ asset: ImageAsset) {
         guard asset.status != .failed else {
             failedAsset = asset
+            return
+        }
+        if asset.id == currentAsset.id, asset.hasFile {
+            previewAsset = asset
             return
         }
         appState.presentedAsset = asset
@@ -757,7 +762,7 @@ private struct IterationThreadAssetCard: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .opacity(1)
+        .opacity(isCurrent ? 1 : 0.5)
         .saturation(1)
         .animation(.easeOut(duration: 0.18), value: isCurrent)
         .onHover { hovered = $0 }
@@ -793,7 +798,7 @@ private struct IterationThreadAssetCard: View {
 
     private var quickActions: some View {
         HStack(spacing: 6) {
-            if asset.hasFile, hovered || isCurrent {
+            if asset.hasFile, hovered {
                 icon("target", help: appState.l10n.continueFromHere, action: onContinue)
                     .transition(.opacity)
                 icon("wand.and.sparkles", help: appState.l10n.edit, action: onEdit)

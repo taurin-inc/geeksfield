@@ -21,6 +21,17 @@ final class ReferenceStore: @unchecked Sendable {
         return refID
     }
 
+    @discardableResult
+    func ingestData(projectID: String, data: Data, preferredExtension: String = "png") throws -> String {
+        let dir = paths.refsDir(projectID)
+        try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        let refID = "ref_" + String(UUID().uuidString.prefix(8).lowercased())
+        let ext = preferredExtension.isEmpty ? "png" : preferredExtension
+        let dest = dir.appendingPathComponent("\(refID).\(ext)")
+        try data.write(to: dest, options: .atomic)
+        return refID
+    }
+
     func url(projectID: String, refID: String) -> URL? {
         let dir = paths.refsDir(projectID)
         let entries = (try? fileManager.contentsOfDirectory(atPath: dir.path)) ?? []

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct PromptBarView: View {
     @Environment(AppState.self) private var appState
@@ -36,6 +37,9 @@ struct PromptBarView: View {
         .onChange(of: appState.selectedImageModel) { _, newModel in
             syncControls(with: newModel)
         }
+        .onPasteCommand(of: [.image]) { providers in
+            loadPastedImages(from: providers, receive: addPastedReferences)
+        }
     }
 
     // MARK: - Prompt editor
@@ -53,7 +57,19 @@ struct PromptBarView: View {
                 contentHeight: $promptHeight,
                 font: .systemFont(ofSize: NSFont.systemFontSize(for: .regular) + 4),
                 minHeight: 24,
-                maxHeight: 140
+                maxHeight: 140,
+                onPasteImages: addPastedReferences,
+                onCommandReturn: {
+                    guard appState.focusedInput == .prompt else { return }
+                    submit()
+                },
+                onFocusChange: { focused in
+                    if focused {
+                        appState.focusedInput = .prompt
+                    } else if appState.focusedInput == .prompt {
+                        appState.focusedInput = nil
+                    }
+                }
             )
             .frame(height: promptHeight)
         }
@@ -88,13 +104,7 @@ struct PromptBarView: View {
         ZStack(alignment: .topTrailing) {
             Group {
                 if let url = asset.thumbnailURL ?? asset.fileURL {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFill()
-                        } else {
-                            Color.white.opacity(0.06)
-                        }
-                    }
+                    LocalImage(url: url, contentMode: .fill)
                 } else {
                     Color.white.opacity(0.06)
                 }
@@ -163,13 +173,7 @@ struct PromptBarView: View {
         ZStack(alignment: .topTrailing) {
             Group {
                 if let url = appState.referenceThumbnailURL(for: id) {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFill()
-                        } else {
-                            Color.white.opacity(0.06)
-                        }
-                    }
+                    LocalImage(url: url, contentMode: .fill)
                 } else {
                     Color.white.opacity(0.06)
                 }
@@ -364,7 +368,6 @@ struct PromptBarView: View {
             )
         }
         .buttonStyle(.plain)
-        .keyboardShortcut(.return, modifiers: .command)
     }
 
     // MARK: - Helpers
@@ -445,5 +448,39 @@ struct PromptBarView: View {
             seen.insert(id)
         }
         return result
+    }
+
+    private func addPastedReferences(_ payloads: [PastedImagePayload]) {
+        for payload in payloads {
+            appState.attachExternalReference(
+                data: payload.data,
+                preferredExtension: payload.preferredExtension
+            )
+        }
+    }
+
+    private func loadPastedImages(
+        from providers: [NSItemProvider],
+        receive: @MainActor @Sendable @escaping ([PastedImagePayload]) -> Void
+    ) {
+        for provider in providers {
+            guard let type = preferredImageType(for: provider) else { continue }
+            provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in
+                guard let data else { return }
+                let payload = PastedImagePayload(
+                    data: data,
+                    preferredExtension: type.preferredFilenameExtension ?? "png"
+                )
+                Task { @MainActor in
+                    receive([payload])
+                }
+            }
+        }
+    }
+
+    private func preferredImageType(for provider: NSItemProvider) -> UTType? {
+        [.png, .jpeg, .heic, .tiff, .image].first {
+            provider.hasItemConformingToTypeIdentifier($0.identifier)
+        }
     }
 }
