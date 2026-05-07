@@ -154,9 +154,9 @@ struct ChatSidebarView: View {
                     }
                 )
                 .frame(height: inputHeight)
-                .frame(minHeight: 38)
+                .frame(minHeight: 44)
                 .padding(.leading, 14)
-                .padding(.vertical, 5)
+                .padding(.vertical, 7)
 
                 Button {
                     submit()
@@ -181,11 +181,29 @@ struct ChatSidebarView: View {
                 .buttonStyle(.plain)
                 .disabled(!canSubmit)
             }
-            .padding(.trailing, 10)
-            .padding(.top, 5)
-            .padding(.bottom, 10)
+            .padding(.trailing, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(appState.focusedInput == .chat ? 0.07 : 0.04))
+            )
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        Color.white.opacity(appState.focusedInput == .chat ? 0.20 : 0.13),
+                        lineWidth: 0.8
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        appState.focusedInput == .chat ? Color.accentColor.opacity(0.34) : Color.clear,
+                        lineWidth: 1
+                    )
+            }
+            .shadow(color: Color.black.opacity(0.10), radius: 7, y: 3)
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
         .padding(10)
     }
 
