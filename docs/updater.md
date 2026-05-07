@@ -4,7 +4,7 @@ geeksfield uses Sparkle 2 for automatic updates outside the Mac App Store.
 
 ## Overview
 
-- Installed apps read the appcast from `https://rapid-studio.github.io/geeksfield/appcast.xml`.
+- Installed apps read the appcast from `https://taurin-inc.github.io/geeksfield/appcast.xml`.
 - The appcast advertises the latest Sparkle update zip.
 - Sparkle verifies the zip with the EdDSA public key embedded in the app.
 - GitHub Releases host both user-facing dmg installers and Sparkle zip archives.

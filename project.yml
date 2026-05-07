@@ -44,7 +44,7 @@ targets:
         NSHumanReadableCopyright: Copyright © 2026 geeksfield contributors. MIT License.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
-        SUFeedURL: https://rapid-studio.github.io/geeksfield/appcast.xml
+        SUFeedURL: https://taurin-inc.github.io/geeksfield/appcast.xml
         SUPublicEDKey: E4GFYrsJhIx3C8TRVuY9Mga0wcxUIjZ+N8URAqQilQk=
         SUEnableInstallerLauncherService: true
         SUEnableAutomaticChecks: true
