@@ -79,12 +79,15 @@ struct SidebarView: View {
 
     private func projectRow(_ project: Project) -> some View {
         let isSelected = appState.selectedProjectID == project.id
+        let projectAssets = appState.assetsByProject[project.id] ?? []
+        let latestImageCreatedAt = projectAssets.map(\.metadata.createdAt).max()
         return Button {
             appState.selectedProjectID = project.id
         } label: {
             ProjectRowView(
                 project: project,
-                imageCount: appState.assetsByProject[project.id]?.count ?? 0
+                imageCount: projectAssets.count,
+                latestImageCreatedAt: latestImageCreatedAt
             )
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
