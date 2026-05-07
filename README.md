@@ -8,11 +8,11 @@
 
 ### 이미지 생성
 
-![geeksfield 이미지 생성 데모](docs/media/geeksfield-generate.gif)
+<img src="docs/media/geeksfield-generate.gif" alt="geeksfield 이미지 생성 데모" width="720">
 
 ### 인페인트로 수정
 
-![geeksfield 인페인트 수정 데모](docs/media/geeksfield-inpaint.gif)
+<img src="docs/media/geeksfield-inpaint.gif" alt="geeksfield 인페인트 수정 데모" width="720">
 
 ## 왜 만들었나요?
 
