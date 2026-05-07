@@ -53,7 +53,7 @@ Secrets should be stored in the protected `release` environment, not as broad re
 4. Review and merge the pull request when ready to publish.
 5. Approve the `release` environment deployment in GitHub Actions.
 6. Confirm the workflow created the GitHub Release and attached both the dmg and zip.
-7. Confirm GitHub Pages published `https://rapid-studio.github.io/geeksfield/appcast.xml`.
+7. Confirm GitHub Pages published `https://taurin-inc.github.io/geeksfield/appcast.xml`.
 8. Install the dmg on a clean machine or test account when changing signing, notarization, packaging, or update behavior.
 
 ## Branch Protection

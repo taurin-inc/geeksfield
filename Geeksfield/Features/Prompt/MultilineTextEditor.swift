@@ -258,6 +258,14 @@ private final class PastingTextView: NSTextView {
             }
         }
 
+        // Finder file copies include both the original file URL and image-like
+        // representations of the file icon. Once the original files have been
+        // resolved, ignore the remaining item representations so the icon does
+        // not get attached as a second reference.
+        if !payloads.isEmpty {
+            return payloads
+        }
+
         for item in pasteboard.pasteboardItems ?? [] {
             if let payload = imagePayload(from: item) {
                 appendUnique(payload, to: &payloads, seen: &seen)

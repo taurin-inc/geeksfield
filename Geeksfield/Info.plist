@@ -34,7 +34,7 @@
 	<key>SUEnableInstallerLauncherService</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://rapid-studio.github.io/geeksfield/appcast.xml</string>
+	<string>https://taurin-inc.github.io/geeksfield/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>E4GFYrsJhIx3C8TRVuY9Mga0wcxUIjZ+N8URAqQilQk=</string>
 	<key>SUScheduledCheckInterval</key>
