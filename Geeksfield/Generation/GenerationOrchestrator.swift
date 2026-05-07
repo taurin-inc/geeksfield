@@ -166,6 +166,78 @@ final class GenerationOrchestrator {
         }
     }
 
+    func retry(
+        asset: ImageAsset,
+        request: GenerationRequest,
+        onUpdate: @MainActor @Sendable @escaping () -> Void
+    ) async throws {
+        guard let provider = providers[request.model.provider] else {
+            throw ImageProviderError.unsupportedOperation("No provider for \(request.model.provider)")
+        }
+        let apiKey = keychain.apiKey(for: request.model.provider) ?? ""
+        if request.model.provider.usesAPIKey && apiKey.isEmpty {
+            throw ImageProviderError.unsupportedOperation("Missing credentials for \(request.model.provider.displayName)")
+        }
+
+        var pending = asset.metadata
+        pending.status = .pending
+        pending.failureReason = nil
+        try metadataStore.write(pending)
+        onUpdate()
+
+        let slotRequest = GenerationRequest(
+            projectID: request.projectID,
+            prompt: request.prompt,
+            negativePrompt: request.negativePrompt,
+            model: request.model,
+            size: request.size,
+            aspectRatio: request.aspectRatio,
+            batchSize: 1,
+            referenceIDs: request.referenceIDs,
+            parentImageID: request.parentImageID,
+            seed: request.seed
+        )
+        let refs = resolveReferences(projectID: request.projectID, ids: request.referenceIDs)
+
+        do {
+            let images = try await provider.generate(
+                request: slotRequest,
+                referenceImages: refs,
+                apiKey: apiKey
+            )
+            guard let image = images.first else {
+                markFailed(
+                    projectID: request.projectID,
+                    imageID: asset.id,
+                    reason: "No image returned for retry."
+                )
+                onUpdate()
+                return
+            }
+            let fileURL = try imageStore.savePNG(
+                data: image,
+                projectID: request.projectID,
+                imageID: asset.id,
+                status: .draft
+            )
+            _ = try? thumbnailStore.generate(
+                for: fileURL,
+                projectID: request.projectID,
+                imageID: asset.id
+            )
+            if var meta = try? metadataStore.read(projectID: request.projectID, imageID: asset.id) {
+                meta.status = .draft
+                meta.failureReason = nil
+                try? metadataStore.write(meta)
+            }
+            onUpdate()
+        } catch {
+            let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+            markFailed(projectID: request.projectID, imageID: asset.id, reason: reason)
+            onUpdate()
+        }
+    }
+
     private func markFailed(projectID: String, imageID: String, reason: String) {
         if var meta = try? metadataStore.read(projectID: projectID, imageID: imageID) {
             meta.status = .failed

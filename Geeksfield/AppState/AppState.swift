@@ -658,13 +658,41 @@ final class AppState {
     // MARK: - Regenerate / use-as-reference
 
     func regenerate(_ asset: ImageAsset) {
+        if asset.status == .failed {
+            retryGeneration(asset)
+            return
+        }
+
+        guard let request = generationRequest(for: asset) else { return }
+        generate(request: request)
+    }
+
+    func retryGeneration(_ asset: ImageAsset) {
+        guard let request = generationRequest(for: asset) else { return }
+        let pid = asset.metadata.projectID
+        Task {
+            do {
+                try await generationOrchestrator.retry(asset: asset, request: request) { [weak self] in
+                    guard let self else { return }
+                    self.refreshAssets(for: pid)
+                    if let updated = self.asset(withID: asset.id, in: pid) {
+                        self.presentedAsset = updated
+                    }
+                }
+            } catch {
+                errorBus.report(error, title: l10n.regenerateFailed)
+            }
+        }
+    }
+
+    private func generationRequest(for asset: ImageAsset) -> GenerationRequest? {
         let meta = asset.metadata
         guard let model = modelRegistry.imageModels.first(where: { $0.id == meta.modelID && $0.provider == meta.provider })
                 ?? modelRegistry.imageModels.first(where: { $0.provider == meta.provider }) else {
             errorBus.report(title: l10n.regenerateFailed, message: l10n.modelNotFound)
-            return
+            return nil
         }
-        let request = GenerationRequest(
+        return GenerationRequest(
             projectID: meta.projectID,
             prompt: meta.prompt,
             negativePrompt: meta.negativePrompt,
@@ -676,7 +704,6 @@ final class AppState {
             parentImageID: meta.parentImageID,
             seed: meta.seed
         )
-        generate(request: request)
     }
 
     func useAsReference(_ asset: ImageAsset) {
