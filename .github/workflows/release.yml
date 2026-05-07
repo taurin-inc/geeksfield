@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
   pages: write
   id-token: write
 
@@ -305,13 +306,165 @@ jobs:
         if: steps.existing_tag.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RELEASE_NOTES_MODEL: gpt-5-mini
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          DMG_ASSET_NAME: ${{ steps.dmg.outputs.asset_name }}
+          SPARKLE_ASSET_NAME: ${{ steps.sparkle.outputs.asset_name }}
         run: |
+          ruby <<'RUBY'
+          require "json"
+          require "net/http"
+          require "open3"
+          require "uri"
+
+          def gh_json(*args)
+            command = ["gh", *args]
+            output, status = Open3.capture2e({"GH_TOKEN" => ENV.fetch("GH_TOKEN")}, *command)
+            raise "#{command.join(" ")} failed:\n#{output}" unless status.success?
+            JSON.parse(output)
+          end
+
+          def release_pr_number
+            pulls = gh_json(
+              "api",
+              "repos/#{ENV.fetch("GITHUB_REPOSITORY")}/commits/#{ENV.fetch("GITHUB_SHA")}/pulls",
+              "-H", "Accept: application/vnd.github+json"
+            )
+            return pulls.first["number"] if pulls.first
+
+            subject = `git log -1 --pretty=%s`.strip
+            subject[/#(\d+)/, 1]
+          end
+
+          def release_changes(pr_number)
+            if pr_number
+              commits = gh_json(
+                "api",
+                "repos/#{ENV.fetch("GITHUB_REPOSITORY")}/pulls/#{pr_number}/commits?per_page=100"
+              )
+              files = gh_json(
+                "api",
+                "repos/#{ENV.fetch("GITHUB_REPOSITORY")}/pulls/#{pr_number}/files?per_page=100"
+              )
+            else
+              commits = [{
+                "commit" => {
+                  "message" => `git log -1 --pretty=%B`
+                }
+              }]
+              files = []
+            end
+
+            subjects = commits
+              .map { |entry| entry.dig("commit", "message").to_s.lines.first.to_s.strip }
+              .reject(&:empty?)
+              .reject { |subject| subject.match?(/\A(Release \d|Merge dev into main|Merge branch )/i) }
+              .uniq
+
+            paths = files.map { |entry| entry["filename"].to_s }.reject(&:empty?).uniq
+            [subjects, paths]
+          end
+
+          def fallback_notes(subjects, paths)
+            notes = []
+            lowered = subjects.join("\n").downcase
+
+            if lowered.include?("sparkle") || paths.any? { |path| path.include?("Sparkle") || path == "project.yml" || path.include?("updater") }
+              notes << "Sparkle 자동 업데이트 설정과 배포 흐름을 개선했습니다."
+            end
+
+            if lowered.include?("paste") || paths.any? { |path| path.include?("MultilineTextEditor") || path.include?("Features/Prompt") || path.include?("Features/Chat") }
+              notes << "이미지 붙여넣기와 입력창 첨부 동작을 더 안정적으로 다듬었습니다."
+            end
+
+            if paths.any? { |path| path.start_with?(".github/workflows/") }
+              notes << "GitHub Actions 릴리스 자동화를 개선했습니다."
+            end
+
+            if paths.any? { |path| path.start_with?("docs/") || path == "README.md" || path == "RELEASING.md" }
+              notes << "사용자와 유지보수자를 위한 문서를 최신 상태로 정리했습니다."
+            end
+
+            notes << "앱 안정성과 사용성을 개선했습니다." if notes.empty? && !subjects.empty?
+            notes << "릴리스 패키지를 갱신했습니다." if notes.empty?
+            notes.uniq
+          end
+
+          def ai_notes(subjects, paths)
+            return nil if ENV.fetch("OPENAI_API_KEY", "").empty?
+
+            begin
+              prompt = {
+                version: ENV.fetch("RELEASE_VERSION"),
+                commit_subjects: subjects,
+                changed_files: paths
+              }
+
+              uri = URI("https://api.openai.com/v1/responses")
+              request = Net::HTTP::Post.new(uri)
+              request["Authorization"] = "Bearer #{ENV.fetch("OPENAI_API_KEY")}"
+              request["Content-Type"] = "application/json"
+              request.body = {
+                model: ENV.fetch("RELEASE_NOTES_MODEL", "gpt-5-mini"),
+                instructions: <<~TEXT,
+                  너는 macOS 앱의 릴리스 노트를 작성하는 기술 라이터다.
+                  입력으로 받은 커밋 제목과 변경 파일만 근거로 사용자에게 보일 한글 변경사항 bullet을 작성하라.
+                  규칙:
+                  - Markdown bullet만 출력한다.
+                  - 2개에서 6개 사이로 작성한다.
+                  - PR 번호, 커밋 해시, 기여자 이름, 내부 브랜치 이름은 쓰지 않는다.
+                  - 과장하지 말고 변경 내용이 불명확하면 보수적으로 표현한다.
+                  - 다운로드 안내나 섹션 제목은 쓰지 않는다.
+                TEXT
+                input: JSON.pretty_generate(prompt),
+                max_output_tokens: 700
+              }.to_json
+
+              response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
+                http.request(request)
+              end
+              raise "OpenAI release notes request failed: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+              data = JSON.parse(response.body)
+              text = data["output_text"].to_s.strip
+              if text.empty?
+                text = data.fetch("output", [])
+                  .flat_map { |item| item.fetch("content", []) }
+                  .map { |content| content["text"].to_s }
+                  .join("\n")
+                  .strip
+              end
+              text.empty? ? nil : text.lines.map(&:strip).reject(&:empty?)
+            rescue => error
+              warn "OpenAI release notes generation failed: #{error.message}. Falling back to local Korean notes."
+              nil
+            end
+          end
+
+          pr_number = release_pr_number
+          subjects, paths = release_changes(pr_number)
+          bullets = ai_notes(subjects, paths) || fallback_notes(subjects, paths).map { |note| "- #{note}" }
+
+          File.open("build/release-notes.md", "w") do |file|
+            file.puts "## 변경사항"
+            file.puts
+            bullets.each { |line| file.puts line.start_with?("- ") ? line : "- #{line}" }
+            file.puts
+            file.puts "## 다운로드"
+            file.puts
+            file.puts "- 처음 설치하는 사용자는 `#{ENV.fetch("DMG_ASSET_NAME")}`를 다운로드하세요."
+            file.puts "- 이미 설치된 앱은 Sparkle 업데이트용 `#{ENV.fetch("SPARKLE_ASSET_NAME")}`로 자동 업데이트됩니다."
+          end
+          RUBY
+
           gh release create "${{ steps.version.outputs.tag }}" \
             "build/${{ steps.dmg.outputs.asset_name }}" \
             "build/${{ steps.sparkle.outputs.asset_name }}" \
             --target "$GITHUB_SHA" \
             --title "${APP_NAME} ${{ steps.version.outputs.tag }}" \
-            --generate-notes
+            --notes-file build/release-notes.md
 
       - name: Update appcast
         if: steps.existing_tag.outputs.exists == 'false'
