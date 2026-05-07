@@ -37,6 +37,9 @@ struct PromptBarView: View {
         .onChange(of: appState.selectedImageModel) { _, newModel in
             syncControls(with: newModel)
         }
+        .task(id: baseAspectTaskID) {
+            await syncAspectWithBaseAsset()
+        }
         .onPasteCommand(of: [.image]) { providers in
             loadPastedImages(from: providers, receive: addPastedReferences)
         }
@@ -393,6 +396,47 @@ struct PromptBarView: View {
         if batchSize > spec.maxBatch {
             batchSize = spec.maxBatch
         }
+    }
+
+    private var baseAspectTaskID: String {
+        [
+            appState.activeBaseAsset?.id ?? "none",
+            appState.selectedImageModel?.provider.rawValue ?? "none",
+            appState.selectedImageModel?.id ?? "none"
+        ].joined(separator: ":")
+    }
+
+    private func syncAspectWithBaseAsset() async {
+        guard let base = appState.activeBaseAsset,
+              let ratio = await ImageAspectReader.aspectRatioString(for: base),
+              appState.activeBaseAsset?.id == base.id else {
+            return
+        }
+        selectedAspect = preferredAspectRatio(ratio)
+    }
+
+    private func preferredAspectRatio(_ ratio: String) -> String {
+        guard let spec = imageSpec,
+              !spec.aspectRatios.contains(ratio),
+              let target = parseAspectRatio(ratio) else {
+            return ratio
+        }
+        return spec.aspectRatios.first { option in
+            guard let value = parseAspectRatio(option) else { return false }
+            return abs(value - target) / target <= 0.015
+        } ?? ratio
+    }
+
+    private func parseAspectRatio(_ raw: String) -> Double? {
+        let parts = raw.split(separator: ":")
+        guard parts.count == 2,
+              let width = Double(parts[0]),
+              let height = Double(parts[1]),
+              width > 0,
+              height > 0 else {
+            return nil
+        }
+        return width / height
     }
 
     private func submit() {

@@ -296,6 +296,11 @@ final class AppState {
         }
         .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
         assetsByProject[projectID] = assets
+        if let presented = presentedAsset,
+           presented.metadata.projectID == projectID,
+           let refreshed = assets.first(where: { $0.id == presented.id }) {
+            presentedAsset = refreshed
+        }
     }
 
     private func recoverPendingAssets(
@@ -360,15 +365,49 @@ final class AppState {
 
     func generate(request: GenerationRequest) {
         let pid = request.projectID
+        let knownAssetIDs = Set((assetsByProject[pid] ?? []).map(\.id))
+        let shouldRevealPendingInThread = presentedAsset?.metadata.projectID == pid
+            && request.parentImageID != nil
         Task {
+            var revealedPending = false
             do {
                 try await generationOrchestrator.execute(request: request) { [weak self] in
-                    self?.refreshAssets(for: pid)
+                    guard let self else { return }
+                    self.refreshAssets(for: pid)
+                    if shouldRevealPendingInThread,
+                       !revealedPending,
+                       let created = self.firstNewGeneratedAsset(
+                        projectID: pid,
+                        excluding: knownAssetIDs,
+                        request: request
+                       ) {
+                        self.presentedAsset = created
+                        revealedPending = true
+                    }
                 }
             } catch {
                 errorBus.report(error, title: l10n.imageGenerationFailed)
             }
         }
+    }
+
+    private func firstNewGeneratedAsset(
+        projectID: String,
+        excluding knownAssetIDs: Set<String>,
+        request: GenerationRequest
+    ) -> ImageAsset? {
+        (assetsByProject[projectID] ?? [])
+            .filter { asset in
+                !knownAssetIDs.contains(asset.id)
+                    && asset.status == .pending
+                    && asset.metadata.prompt == request.prompt
+                    && asset.metadata.provider == request.model.provider
+                    && asset.metadata.modelID == request.model.id
+                    && asset.metadata.parentImageID == request.parentImageID
+                    && asset.metadata.referenceIDs == request.referenceIDs
+            }
+            .sorted(by: sortRelatedAssets)
+            .first
     }
 
     // MARK: - References
