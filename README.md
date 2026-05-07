@@ -8,15 +8,11 @@
 
 ### 이미지 생성
 
-<video src="docs/media/geeksfield-generate.mp4" controls muted playsinline></video>
-
-[영상이 보이지 않으면 파일로 보기](docs/media/geeksfield-generate.mp4)
+<img src="docs/media/geeksfield-generate.gif" alt="geeksfield 이미지 생성 데모" width="720">
 
 ### 인페인트로 수정
 
-<video src="docs/media/geeksfield-inpaint.mp4" controls muted playsinline></video>
-
-[영상이 보이지 않으면 파일로 보기](docs/media/geeksfield-inpaint.mp4)
+<img src="docs/media/geeksfield-inpaint.gif" alt="geeksfield 인페인트 수정 데모" width="720">
 
 ## 왜 만들었나요?
 
