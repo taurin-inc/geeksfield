@@ -16,12 +16,16 @@ final class AppState {
     let autoUpdater: any AutoUpdater = SparkleAutoUpdater()
 
     @ObservationIgnored
+    private let generationQueue = GenerationQueue(maxConcurrentStreams: 3)
+
+    @ObservationIgnored
     private lazy var generationOrchestrator = GenerationOrchestrator(
         imageStore: imageStore,
         metadataStore: metadataStore,
         thumbnailStore: thumbnailStore,
         referenceStore: referenceStore,
-        keychain: keychain
+        keychain: keychain,
+        generationQueue: generationQueue
     )
 
     @ObservationIgnored
