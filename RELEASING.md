@@ -78,7 +78,8 @@ Optional:
 - One approving review is required.
 - Stale approvals are dismissed when new commits are pushed.
 - Review conversations must be resolved before merging.
-- Squash merge is the only allowed merge method.
+- Merge commit is the allowed merge method for `dev` -> `main` release pull requests.
+- Release merge commits are created on `main`; they are not automatically added back to `dev`.
 
 Repository administrators may bypass the ruleset when necessary, but routine changes should still go through pull requests.
 
