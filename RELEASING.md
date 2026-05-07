@@ -31,6 +31,16 @@ Each successful release publishes two assets:
 
 The appcast points to the zip asset. The release page should direct users to the dmg.
 
+## Release Notes
+
+GitHub Release notes are generated automatically by the release workflow.
+For standard `dev` -> `main` release pull requests, the workflow finds the merged pull request,
+reads its commits and changed files, and writes Korean release notes before creating the release.
+
+If the protected `release` environment has an `OPENAI_API_KEY` secret, the workflow uses it to
+summarize the changes in natural Korean. Without that secret, the workflow still publishes the
+release with conservative Korean fallback notes based on the changed paths.
+
 ## Required Secrets
 
 The release environment requires these secrets:
@@ -44,6 +54,10 @@ The release environment requires these secrets:
 - `SPARKLE_PRIVATE_KEY`: Sparkle EdDSA private key for signing update archives.
 
 Secrets should be stored in the protected `release` environment, not as broad repository secrets.
+
+Optional:
+
+- `OPENAI_API_KEY`: OpenAI API key used only for automatic Korean GitHub Release notes.
 
 ## Release Checklist
 
