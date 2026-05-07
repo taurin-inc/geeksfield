@@ -129,6 +129,11 @@ struct ImageThreadWorkspaceView: View {
                 .onAppear {
                     proxy.scrollTo(currentAsset.id, anchor: .center)
                 }
+                .onChange(of: currentAsset.id) { _, id in
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        proxy.scrollTo(id, anchor: .center)
+                    }
+                }
             }
         }
     }

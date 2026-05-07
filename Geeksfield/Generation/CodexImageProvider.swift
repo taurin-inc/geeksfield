@@ -59,6 +59,7 @@ struct CodexImageProvider: ImageProvider {
         \(request.prompt)
 
         The second attached image is an edit guide: red highlighted pixels mark the only region to change. Preserve the rest of the first image as closely as possible. Return the complete edited image, not the guide.
+        Keep the output canvas at the same aspect ratio as the first attached image.
         """
         return try await requestImage(prompt: prompt, images: [originalPNG, guidePNG], modelID: request.model.id)
     }
