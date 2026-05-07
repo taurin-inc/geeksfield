@@ -363,11 +363,11 @@ final class AppState {
 
     // MARK: - Generation
 
-    func generate(request: GenerationRequest) {
+    func generate(request: GenerationRequest, revealPendingInThread: Bool? = nil) {
         let pid = request.projectID
         let knownAssetIDs = Set((assetsByProject[pid] ?? []).map(\.id))
-        let shouldRevealPendingInThread = presentedAsset?.metadata.projectID == pid
-            && request.parentImageID != nil
+        let shouldRevealPendingInThread = revealPendingInThread
+            ?? (presentedAsset?.metadata.projectID == pid && request.parentImageID != nil)
         Task {
             var revealedPending = false
             do {
