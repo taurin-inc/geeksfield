@@ -3,6 +3,7 @@ import SwiftUI
 struct ProjectRowView: View {
     let project: Project
     let imageCount: Int
+    let latestImageCreatedAt: Date?
     @Environment(AppState.self) private var appState
 
     var body: some View {
@@ -16,9 +17,11 @@ struct ProjectRowView: View {
                 Text(project.name)
                     .font(.body)
                     .lineLimit(1)
-                Text(appState.l10n.relativeDate(project.updatedAt))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                if let latestImageCreatedAt {
+                    Text(appState.l10n.relativeDate(latestImageCreatedAt))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             Spacer(minLength: 6)

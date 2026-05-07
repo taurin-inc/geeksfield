@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct PromptBarView: View {
     @Environment(AppState.self) private var appState
+    var canRevealPendingInThread: (String?) -> Bool = { _ in false }
+
     @State private var prompt: String = ""
     @State private var batchSize: Int = 3
     @State private var selectedSize: Size?
@@ -463,6 +465,7 @@ struct PromptBarView: View {
 
         let size = selectedSize ?? .auto
         let referenceIDs = mergedReferenceIDs()
+        let parentImageID = appState.activeBaseAsset?.id ?? referenceIDs.first(where: { !$0.hasPrefix("ref_") })
         let request = GenerationRequest(
             projectID: projectID,
             prompt: trimmed,
@@ -472,10 +475,10 @@ struct PromptBarView: View {
             aspectRatio: selectedAspect,
             batchSize: batchSize,
             referenceIDs: referenceIDs,
-            parentImageID: appState.activeBaseAsset?.id ?? referenceIDs.first(where: { !$0.hasPrefix("ref_") }),
+            parentImageID: parentImageID,
             seed: nil
         )
-        appState.generate(request: request)
+        appState.generate(request: request, revealPendingInThread: canRevealPendingInThread(parentImageID))
         prompt = ""
         appState.clearReferences()
     }

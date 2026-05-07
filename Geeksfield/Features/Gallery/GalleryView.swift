@@ -17,7 +17,7 @@ struct GalleryView: View {
             content
                 .frame(maxHeight: .infinity)
 
-            PromptBarView()
+            PromptBarView(canRevealPendingInThread: canRevealPendingInCurrentThread)
         }
         .navigationSplitViewColumnWidth(min: 480, ideal: 720)
         .failedImageAlert(asset: $failedAsset)
@@ -62,6 +62,18 @@ struct GalleryView: View {
         }
         let rootID = activeThreadRootID ?? asset.id
         return appState.asset(withID: rootID, in: selectedProjectID) ?? asset
+    }
+
+    private var currentThreadAssetIDs: Set<String> {
+        guard let asset = currentThreadAsset else { return [] }
+        return Set(appState.threadRuns(for: asset).flatMap { run in
+            run.assets.map(\.id)
+        })
+    }
+
+    private func canRevealPendingInCurrentThread(parentImageID: String?) -> Bool {
+        guard let parentImageID else { return false }
+        return currentThreadAssetIDs.contains(parentImageID)
     }
 
     private var toolbar: some View {

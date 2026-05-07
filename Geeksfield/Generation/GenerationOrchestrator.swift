@@ -21,6 +21,7 @@ final class GenerationOrchestrator {
     let thumbnailStore: ThumbnailStore
     let referenceStore: ReferenceStore
     let keychain: KeychainStore
+    let generationQueue: GenerationQueue
 
     init(
         providers: [Provider: any ImageProvider] = [
@@ -30,7 +31,8 @@ final class GenerationOrchestrator {
         metadataStore: MetadataStore = MetadataStore(),
         thumbnailStore: ThumbnailStore = ThumbnailStore(),
         referenceStore: ReferenceStore = ReferenceStore(),
-        keychain: KeychainStore = KeychainStore()
+        keychain: KeychainStore = KeychainStore(),
+        generationQueue: GenerationQueue = GenerationQueue()
     ) {
         self.providers = providers
         self.imageStore = imageStore
@@ -38,6 +40,7 @@ final class GenerationOrchestrator {
         self.thumbnailStore = thumbnailStore
         self.referenceStore = referenceStore
         self.keychain = keychain
+        self.generationQueue = generationQueue
     }
 
     private func resolveReferences(projectID: String, ids: [String]) -> [Data] {
@@ -101,27 +104,65 @@ final class GenerationOrchestrator {
         onUpdate()
 
         let refs = resolveReferences(projectID: request.projectID, ids: request.referenceIDs)
+        let generationQueue = self.generationQueue
+        func makeSlotRequest() -> GenerationRequest {
+            GenerationRequest(
+                projectID: request.projectID,
+                prompt: request.prompt,
+                negativePrompt: request.negativePrompt,
+                model: request.model,
+                size: request.size,
+                aspectRatio: request.aspectRatio,
+                batchSize: 1,
+                referenceIDs: request.referenceIDs,
+                parentImageID: request.parentImageID,
+                seed: request.seed
+            )
+        }
+
+        func apply(_ result: SlotGenerationResult) {
+            switch result {
+            case .success(_, let id, let data):
+                do {
+                    let fileURL = try imageStore.savePNG(
+                        data: data,
+                        projectID: request.projectID,
+                        imageID: id,
+                        status: .draft,
+                        createdAt: now
+                    )
+                    _ = try? thumbnailStore.generate(
+                        for: fileURL,
+                        projectID: request.projectID,
+                        imageID: id
+                    )
+                    if var meta = try? metadataStore.read(projectID: request.projectID, imageID: id) {
+                        meta.status = .draft
+                        meta.failureReason = nil
+                        try? metadataStore.write(meta)
+                    }
+                } catch {
+                    let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+                    markFailed(projectID: request.projectID, imageID: id, reason: reason)
+                }
+            case .failure(_, let id, let reason):
+                markFailed(projectID: request.projectID, imageID: id, reason: reason)
+            }
+            onUpdate()
+        }
+
         try await withThrowingTaskGroup(of: SlotGenerationResult.self) { group in
             for (slot, id) in slotIDs.enumerated() {
-                let slotRequest = GenerationRequest(
-                    projectID: request.projectID,
-                    prompt: request.prompt,
-                    negativePrompt: request.negativePrompt,
-                    model: request.model,
-                    size: request.size,
-                    aspectRatio: request.aspectRatio,
-                    batchSize: 1,
-                    referenceIDs: request.referenceIDs,
-                    parentImageID: request.parentImageID,
-                    seed: request.seed
-                )
+                let slotRequest = makeSlotRequest()
                 group.addTask {
                     do {
-                        let images = try await provider.generate(
-                            request: slotRequest,
-                            referenceImages: refs,
-                            apiKey: apiKey
-                        )
+                        let images = try await generationQueue.withPermit {
+                            try await provider.generate(
+                                request: slotRequest,
+                                referenceImages: refs,
+                                apiKey: apiKey
+                            )
+                        }
                         guard let image = images.first else {
                             return .failure(slot: slot, id: id, reason: "No image returned for slot \(slot + 1).")
                         }
@@ -134,35 +175,80 @@ final class GenerationOrchestrator {
             }
 
             for try await result in group {
-                switch result {
-                case .success(_, let id, let data):
-                    do {
-                        let fileURL = try imageStore.savePNG(
-                            data: data,
-                            projectID: request.projectID,
-                            imageID: id,
-                            status: .draft,
-                            createdAt: now
-                        )
-                        _ = try? thumbnailStore.generate(
-                            for: fileURL,
-                            projectID: request.projectID,
-                            imageID: id
-                        )
-                        if var meta = try? metadataStore.read(projectID: request.projectID, imageID: id) {
-                            meta.status = .draft
-                            meta.failureReason = nil
-                            try? metadataStore.write(meta)
-                        }
-                    } catch {
-                        let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
-                        markFailed(projectID: request.projectID, imageID: id, reason: reason)
-                    }
-                case .failure(_, let id, let reason):
-                    markFailed(projectID: request.projectID, imageID: id, reason: reason)
-                }
-                onUpdate()
+                apply(result)
             }
+        }
+    }
+
+    func retry(
+        asset: ImageAsset,
+        request: GenerationRequest,
+        onUpdate: @MainActor @Sendable @escaping () -> Void
+    ) async throws {
+        guard let provider = providers[request.model.provider] else {
+            throw ImageProviderError.unsupportedOperation("No provider for \(request.model.provider)")
+        }
+        let apiKey = keychain.apiKey(for: request.model.provider) ?? ""
+        if request.model.provider.usesAPIKey && apiKey.isEmpty {
+            throw ImageProviderError.unsupportedOperation("Missing credentials for \(request.model.provider.displayName)")
+        }
+
+        var pending = asset.metadata
+        pending.status = .pending
+        pending.failureReason = nil
+        try metadataStore.write(pending)
+        onUpdate()
+
+        let slotRequest = GenerationRequest(
+            projectID: request.projectID,
+            prompt: request.prompt,
+            negativePrompt: request.negativePrompt,
+            model: request.model,
+            size: request.size,
+            aspectRatio: request.aspectRatio,
+            batchSize: 1,
+            referenceIDs: request.referenceIDs,
+            parentImageID: request.parentImageID,
+            seed: request.seed
+        )
+        let refs = resolveReferences(projectID: request.projectID, ids: request.referenceIDs)
+
+        do {
+            let images = try await provider.generate(
+                request: slotRequest,
+                referenceImages: refs,
+                apiKey: apiKey
+            )
+            guard let image = images.first else {
+                markFailed(
+                    projectID: request.projectID,
+                    imageID: asset.id,
+                    reason: "No image returned for retry."
+                )
+                onUpdate()
+                return
+            }
+            let fileURL = try imageStore.savePNG(
+                data: image,
+                projectID: request.projectID,
+                imageID: asset.id,
+                status: .draft
+            )
+            _ = try? thumbnailStore.generate(
+                for: fileURL,
+                projectID: request.projectID,
+                imageID: asset.id
+            )
+            if var meta = try? metadataStore.read(projectID: request.projectID, imageID: asset.id) {
+                meta.status = .draft
+                meta.failureReason = nil
+                try? metadataStore.write(meta)
+            }
+            onUpdate()
+        } catch {
+            let reason = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+            markFailed(projectID: request.projectID, imageID: asset.id, reason: reason)
+            onUpdate()
         }
     }
 
@@ -216,12 +302,14 @@ final class GenerationOrchestrator {
         onUpdate()
 
         do {
-            let image = try await provider.edit(
-                request: request,
-                originalPNG: originalPNG,
-                maskPNG: maskPNG,
-                apiKey: apiKey
-            )
+            let image = try await generationQueue.withPermit {
+                try await provider.edit(
+                    request: request,
+                    originalPNG: originalPNG,
+                    maskPNG: maskPNG,
+                    apiKey: apiKey
+                )
+            }
             let fileURL = try imageStore.savePNG(
                 data: image,
                 projectID: request.projectID,

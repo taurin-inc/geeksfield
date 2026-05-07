@@ -26,8 +26,7 @@ private struct FailedImageAlertModifier: ViewModifier {
             presenting: failedAsset
         ) { asset in
             Button(appState.l10n.retryGeneration) {
-                appState.regenerate(asset)
-                clearPresentedAssetIfNeeded(asset)
+                appState.retryGeneration(asset)
                 failedAsset = nil
             }
             Button(appState.l10n.deleteImage, role: .destructive) {

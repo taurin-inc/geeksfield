@@ -42,10 +42,17 @@ private struct IterationGroupCard: View {
         VStack(alignment: .leading, spacing: 8) {
             previewArea
 
-            Text(title)
-                .font(.callout.weight(.semibold))
-                .lineLimit(1)
-                .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Text(summary)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
         }
         .padding(6)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -142,6 +149,10 @@ private struct IterationGroupCard: View {
             .first?
             .prompt ?? ""
         return rootPrompt.isEmpty ? appState.l10n.emptyPrompt : rootPrompt
+    }
+
+    private var summary: String {
+        "\(group.runs.count) \(appState.l10n.requests) · \(group.assets.count) \(appState.l10n.variants)"
     }
 }
 

@@ -2,9 +2,20 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
+private struct CodexHTTPStatusError: Error, LocalizedError {
+    let statusCode: Int
+    let body: String
+    let retryAfter: TimeInterval?
+
+    var errorDescription: String? {
+        let snippet = body.prefix(200)
+        return "HTTP \(statusCode): \(snippet)"
+    }
+}
+
 struct CodexImageProvider: ImageProvider {
     private static let requestTimeoutSeconds: UInt64 = 300
-    private static let timeoutRetryCount = 1
+    private static let transientRetryCount = 2
     private static let timeoutMessage = "Codex image generation timed out."
     static let defaultEndpoint = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
 
@@ -15,7 +26,7 @@ struct CodexImageProvider: ImageProvider {
 
     init(
         endpoint: URL = CodexImageProvider.defaultEndpoint,
-        session: URLSession = .shared,
+        session: URLSession = CodexImageProvider.makeSession(),
         authStore: CodexAuthStore = CodexAuthStore()
     ) {
         self.endpoint = endpoint
@@ -49,6 +60,16 @@ struct CodexImageProvider: ImageProvider {
             }
             return ordered.compactMap { $0 }
         }
+    }
+
+    private static func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.default
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = TimeInterval(requestTimeoutSeconds + 15)
+        configuration.timeoutIntervalForResource = TimeInterval(
+            (requestTimeoutSeconds + 15) * UInt64(transientRetryCount + 1)
+        )
+        return URLSession(configuration: configuration)
     }
 
     func edit(request: InpaintRequest, originalPNG: Data, maskPNG: Data, apiKey: String) async throws -> Data {
@@ -116,7 +137,7 @@ struct CodexImageProvider: ImageProvider {
 
         let httpBody = try JSONSerialization.data(withJSONObject: body)
         var lastError: Error?
-        for attempt in 0...Self.timeoutRetryCount {
+        for attempt in 0...Self.transientRetryCount {
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
             request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
@@ -134,11 +155,11 @@ struct CodexImageProvider: ImageProvider {
                     try await streamImage(for: preparedRequest)
                 }
             } catch {
-                guard Self.isTimeout(error), attempt < Self.timeoutRetryCount else {
+                guard Self.isRetryable(error), attempt < Self.transientRetryCount else {
                     throw error
                 }
                 lastError = error
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(nanoseconds: Self.retryDelayNanoseconds(for: attempt, after: error))
             }
         }
 
@@ -153,7 +174,11 @@ struct CodexImageProvider: ImageProvider {
                 body += line
                 if body.count > 2_000 { break }
             }
-            throw ImageProviderError.http(http.statusCode, body)
+            throw CodexHTTPStatusError(
+                statusCode: http.statusCode,
+                body: body,
+                retryAfter: Self.retryAfterDelay(from: http.value(forHTTPHeaderField: "Retry-After"))
+            )
         }
 
         var eventLines: [String] = []
@@ -429,5 +454,54 @@ struct CodexImageProvider: ImageProvider {
             return message == timeoutMessage
         }
         return false
+    }
+
+    private static func isRetryable(_ error: Error) -> Bool {
+        if isTimeout(error) {
+            return true
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .networkConnectionLost,
+                 .cannotConnectToHost,
+                 .dnsLookupFailed,
+                 .cannotFindHost:
+                return true
+            default:
+                return false
+            }
+        }
+        if let httpError = error as? CodexHTTPStatusError {
+            return [408, 429, 500, 502, 503, 504].contains(httpError.statusCode)
+        }
+        if case .http(let statusCode, _) = error as? ImageProviderError {
+            return [408, 429, 500, 502, 503, 504].contains(statusCode)
+        }
+        return false
+    }
+
+    private static func retryDelayNanoseconds(for attempt: Int, after error: Error) -> UInt64 {
+        if let retryAfter = (error as? CodexHTTPStatusError)?.retryAfter {
+            let clampedSeconds = min(60, max(0.5, retryAfter))
+            return UInt64(clampedSeconds * 1_000_000_000)
+        }
+
+        let seconds = min(8, 2 << max(0, attempt))
+        let jitter = UInt64.random(in: 0...500_000_000)
+        return UInt64(seconds) * 1_000_000_000 + jitter
+    }
+
+    private static func retryAfterDelay(from value: String?) -> TimeInterval? {
+        guard let value, !value.isEmpty else { return nil }
+        if let seconds = TimeInterval(value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return seconds
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "E, dd MMM yyyy HH:mm:ss zzz"
+        guard let date = formatter.date(from: value) else { return nil }
+        return max(0, date.timeIntervalSinceNow)
     }
 }
