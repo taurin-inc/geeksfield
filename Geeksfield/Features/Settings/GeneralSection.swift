@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GeneralSection: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let l10n = appState.l10n
@@ -45,13 +46,21 @@ struct GeneralSection: View {
                             Spacer()
 
                             Button(l10n.checkForUpdates) {
-                                appState.autoUpdater.checkForUpdates()
+                                checkForUpdates()
                             }
                             .buttonStyle(.bordered)
                         }
                     }
                 }
             }
+        }
+    }
+
+    private func checkForUpdates() {
+        dismiss()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            appState.autoUpdater.checkForUpdates()
         }
     }
 }
