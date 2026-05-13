@@ -224,6 +224,24 @@ struct L10n: Sendable, Equatable {
     var promptPlaceholder: String { t("무엇을 그릴까요?", "Describe the scene you imagine") }
     var sizeLabel: String { t("크기", "Size") }
     var aspectLabel: String { t("비율", "Aspect") }
+    var resolution2KNote: String {
+        t(
+            "빠른 표준 크기입니다.",
+            "Fast standard size."
+        )
+    }
+    var resolution4KNote: String {
+        t(
+            "API 최대 생성 후 업스케일합니다.",
+            "API max, then upscales."
+        )
+    }
+    var resolutionMaxNote: String {
+        t(
+            "API 최대 크기로 생성합니다.",
+            "Generates at API max."
+        )
+    }
     func imageCount(_ n: Int) -> String { t("\(n)장", "\(n) images") }
     var promptRequired: String { t("프롬프트 필요", "Prompt required") }
     var enterWhatToDraw: String { t("무엇을 그릴지 입력하세요.", "Enter what you want to draw.") }
