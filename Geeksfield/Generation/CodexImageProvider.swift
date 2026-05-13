@@ -49,7 +49,12 @@ struct CodexImageProvider: ImageProvider {
         return try await withThrowingTaskGroup(of: (Int, Data).self) { group in
             for index in 0..<count {
                 group.addTask {
-                    let image = try await requestImage(prompt: prompt, images: referenceImages, modelID: modelID)
+                    let image = try await requestImage(
+                        prompt: prompt,
+                        images: referenceImages,
+                        modelID: modelID,
+                        size: size
+                    )
                     let normalized = ImageOutputNormalizer.normalizedPNG(image, size: size, aspectRatio: aspectRatio)
                     return (index, normalized)
                 }
@@ -82,7 +87,7 @@ struct CodexImageProvider: ImageProvider {
         The second attached image is an edit guide: red highlighted pixels mark the only region to change. Preserve the rest of the first image as closely as possible. Return the complete edited image, not the guide.
         Keep the output canvas at the same aspect ratio as the first attached image.
         """
-        return try await requestImage(prompt: prompt, images: [originalPNG, guidePNG], modelID: request.model.id)
+        return try await requestImage(prompt: prompt, images: [originalPNG, guidePNG], modelID: request.model.id, size: nil)
     }
 
     private static func promptWithOutputOptions(_ prompt: String, size: Size, aspectRatio: String?) -> String {
@@ -102,7 +107,7 @@ struct CodexImageProvider: ImageProvider {
         return lines.joined(separator: "\n")
     }
 
-    private func requestImage(prompt: String, images: [Data], modelID: String) async throws -> Data {
+    private func requestImage(prompt: String, images: [Data], modelID: String, size: Size?) async throws -> Data {
         let auth = try authStore.load()
         var content: [[String: String]] = [
             ["type": "input_text", "text": prompt]
@@ -125,7 +130,7 @@ struct CodexImageProvider: ImageProvider {
                 ]
             ],
             "tools": [
-                ["type": "image_generation", "output_format": "png"]
+                Self.imageGenerationTool(size: size)
             ],
             "tool_choice": ["type": "image_generation"],
             "parallel_tool_calls": false,
@@ -164,6 +169,14 @@ struct CodexImageProvider: ImageProvider {
         }
 
         throw lastError ?? ImageProviderError.emptyResponse
+    }
+
+    private static func imageGenerationTool(size: Size?) -> [String: String] {
+        var tool = ["type": "image_generation", "output_format": "png"]
+        if let size, !size.isAuto {
+            tool["size"] = size.description
+        }
+        return tool
     }
 
     private func streamImage(for request: URLRequest) async throws -> Data {
