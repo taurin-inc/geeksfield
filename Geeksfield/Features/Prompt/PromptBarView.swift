@@ -8,10 +8,11 @@ struct PromptBarView: View {
 
     @State private var prompt: String = ""
     @State private var batchSize: Int = 3
-    @State private var selectedSize: Size?
+    @State private var selectedResolution: OutputResolution = .twoK
     @State private var selectedAspect: String?
     @State private var promptHeight: CGFloat = 24
     @State private var isBaseBadgeHovered = false
+    @State private var isResolutionPickerPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -212,20 +213,7 @@ struct PromptBarView: View {
         HStack(spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    modelPill
-
                     if let spec = imageSpec {
-                        if spec.sizes.contains(where: { !$0.isAuto }) {
-                            pillMenu(
-                                icon: "rectangle.ratio.16.to.9",
-                                label: selectedSize.map { $0.isAuto ? "auto" : $0.description } ?? appState.l10n.sizeLabel
-                            ) {
-                                ForEach(spec.sizes, id: \.self) { size in
-                                    Button(size.isAuto ? "auto" : size.description) { selectedSize = size }
-                                }
-                            }
-                        }
-
                         pillMenu(
                             icon: "aspectratio",
                             label: selectedAspect ?? appState.l10n.aspectLabel
@@ -234,6 +222,8 @@ struct PromptBarView: View {
                                 Button(ratio) { selectedAspect = ratio }
                             }
                         }
+
+                        resolutionPickerPill
 
                         batchStepperPill(maxBatch: spec.maxBatch)
                     }
@@ -330,6 +320,34 @@ struct PromptBarView: View {
         .disabled(!enabled)
     }
 
+    private var resolutionPickerPill: some View {
+        Button {
+            isResolutionPickerPresented.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption)
+                Text(selectedResolution.label).font(.callout.weight(.medium))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Color.white.opacity(0.06)))
+            .overlay { Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1) }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .popover(isPresented: $isResolutionPickerPresented, arrowEdge: .bottom) {
+            ResolutionPickerPopover(
+                selected: selectedResolution,
+                aspectRatio: selectedAspect,
+                l10n: appState.l10n
+            ) { resolution in
+                selectedResolution = resolution
+                isResolutionPickerPresented = false
+            }
+        }
+    }
+
     @ViewBuilder
     private func pillMenu<Content: View>(
         icon: String,
@@ -389,9 +407,6 @@ struct PromptBarView: View {
 
     private func syncControls(with model: ModelDescriptor?) {
         guard let spec = model.flatMap({ imageSpec(for: $0) }) else { return }
-        if selectedSize.map({ !spec.sizes.contains($0) }) ?? true {
-            selectedSize = spec.sizes.first
-        }
         if selectedAspect.map({ !spec.aspectRatios.contains($0) }) ?? true {
             selectedAspect = spec.aspectRatios.first
         }
@@ -463,7 +478,7 @@ struct PromptBarView: View {
             return
         }
 
-        let size = selectedSize ?? .auto
+        let size = selectedResolution.size(aspectRatio: selectedAspect)
         let referenceIDs = mergedReferenceIDs()
         let parentImageID = appState.activeBaseAsset?.id ?? referenceIDs.first(where: { !$0.hasPrefix("ref_") })
         let request = GenerationRequest(
@@ -529,5 +544,126 @@ struct PromptBarView: View {
         [.png, .jpeg, .heic, .tiff, .image].first {
             provider.hasItemConformingToTypeIdentifier($0.identifier)
         }
+    }
+}
+
+private enum OutputResolution: CaseIterable, Hashable {
+    case twoK
+    case fourK
+    case max
+
+    var label: String {
+        switch self {
+        case .twoK: return "2K"
+        case .fourK: return "4K"
+        case .max: return "Max"
+        }
+    }
+
+    func size(aspectRatio: String?) -> Size {
+        switch self {
+        case .twoK:
+            return ImageGenerationSizePolicy.targetSize(longEdge: 2_048, aspectRatio: aspectRatio)
+        case .fourK:
+            return ImageGenerationSizePolicy.targetSize(
+                longEdge: ImageGenerationSizePolicy.apiMaxLongEdge,
+                aspectRatio: aspectRatio
+            )
+        case .max:
+            return ImageGenerationSizePolicy.apiConstrainedSize(aspectRatio: aspectRatio)
+        }
+    }
+
+    func noteText(l10n: L10n) -> String? {
+        switch self {
+        case .twoK:
+            return l10n.resolution2KNote
+        case .fourK:
+            return l10n.resolution4KNote
+        case .max:
+            return l10n.resolutionMaxNote
+        }
+    }
+
+    func sizeLabel(aspectRatio: String?) -> String {
+        let size = size(aspectRatio: aspectRatio)
+        return "\(size.width) * \(size.height)"
+    }
+}
+
+private struct ResolutionMenuRow: View {
+    let title: String
+    let note: String?
+    let size: String
+    var isSelected = false
+    var action: (() -> Void)?
+
+    var body: some View {
+        Button {
+            action?()
+        } label: {
+            HStack(alignment: .center, spacing: 16) {
+                Text(title)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(.primary)
+                    .frame(width: 54, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    if let note {
+                        Text(note)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Text(size)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(.primary)
+                        .monospacedDigit()
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .opacity(isSelected ? 1 : 0)
+                    .frame(width: 16, alignment: .trailing)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .frame(width: 330, alignment: .leading)
+            .frame(minHeight: 58)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ResolutionPickerPopover: View {
+    let selected: OutputResolution
+    let aspectRatio: String?
+    let l10n: L10n
+    let onSelect: (OutputResolution) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(OutputResolution.allCases, id: \.self) { resolution in
+                ResolutionMenuRow(
+                    title: resolution.label,
+                    note: resolution.noteText(l10n: l10n),
+                    size: resolution.sizeLabel(aspectRatio: aspectRatio),
+                    isSelected: resolution == selected
+                ) {
+                    onSelect(resolution)
+                }
+
+                if resolution != OutputResolution.allCases.last {
+                    Divider()
+                }
+            }
+        }
+        .background(.regularMaterial)
+        .frame(width: 330)
     }
 }
