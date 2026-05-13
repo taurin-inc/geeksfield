@@ -8,7 +8,7 @@ struct PromptBarView: View {
 
     @State private var prompt: String = ""
     @State private var batchSize: Int = 3
-    @State private var selectedSize: Size?
+    @State private var selectedResolution: OutputResolution = .auto
     @State private var selectedAspect: String?
     @State private var promptHeight: CGFloat = 24
     @State private var isBaseBadgeHovered = false
@@ -215,13 +215,13 @@ struct PromptBarView: View {
                     modelPill
 
                     if let spec = imageSpec {
-                        if spec.sizes.contains(where: { !$0.isAuto }) {
-                            pillMenu(
-                                icon: "rectangle.ratio.16.to.9",
-                                label: selectedSize.map { $0.isAuto ? "auto" : $0.description } ?? appState.l10n.sizeLabel
-                            ) {
-                                ForEach(spec.sizes, id: \.self) { size in
-                                    Button(size.isAuto ? "auto" : size.description) { selectedSize = size }
+                        pillMenu(
+                            icon: "arrow.up.left.and.arrow.down.right",
+                            label: selectedResolution.label
+                        ) {
+                            ForEach(OutputResolution.allCases, id: \.self) { resolution in
+                                Button(resolution.label) {
+                                    selectedResolution = resolution
                                 }
                             }
                         }
@@ -389,9 +389,6 @@ struct PromptBarView: View {
 
     private func syncControls(with model: ModelDescriptor?) {
         guard let spec = model.flatMap({ imageSpec(for: $0) }) else { return }
-        if selectedSize.map({ !spec.sizes.contains($0) }) ?? true {
-            selectedSize = spec.sizes.first
-        }
         if selectedAspect.map({ !spec.aspectRatios.contains($0) }) ?? true {
             selectedAspect = spec.aspectRatios.first
         }
@@ -463,7 +460,7 @@ struct PromptBarView: View {
             return
         }
 
-        let size = selectedSize ?? .auto
+        let size = selectedResolution.size(aspectRatio: selectedAspect)
         let referenceIDs = mergedReferenceIDs()
         let parentImageID = appState.activeBaseAsset?.id ?? referenceIDs.first(where: { !$0.hasPrefix("ref_") })
         let request = GenerationRequest(
@@ -529,5 +526,52 @@ struct PromptBarView: View {
         [.png, .jpeg, .heic, .tiff, .image].first {
             provider.hasItemConformingToTypeIdentifier($0.identifier)
         }
+    }
+}
+
+private enum OutputResolution: CaseIterable, Hashable {
+    case auto
+    case twoK
+    case fourK
+
+    var label: String {
+        switch self {
+        case .auto: return "auto"
+        case .twoK: return "2K"
+        case .fourK: return "4K"
+        }
+    }
+
+    func size(aspectRatio: String?) -> Size {
+        guard let longEdge else { return .auto }
+        guard let ratio = aspectRatio.flatMap(Self.parseAspectRatio) else {
+            return Size(width: longEdge, height: longEdge)
+        }
+
+        if ratio >= 1 {
+            return Size(width: longEdge, height: max(1, Int((Double(longEdge) / ratio).rounded())))
+        }
+        return Size(width: max(1, Int((Double(longEdge) * ratio).rounded())), height: longEdge)
+    }
+
+    private var longEdge: Int? {
+        switch self {
+        case .auto: return nil
+        case .twoK: return 2048
+        case .fourK: return 4096
+        }
+    }
+
+    private static func parseAspectRatio(_ raw: String) -> Double? {
+        guard raw != "auto" else { return nil }
+        let parts = raw.split(separator: ":")
+        guard parts.count == 2,
+              let width = Double(parts[0]),
+              let height = Double(parts[1]),
+              width > 0,
+              height > 0 else {
+            return nil
+        }
+        return width / height
     }
 }
