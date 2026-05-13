@@ -15,32 +15,34 @@ enum ImageOutputNormalizer {
         let height = image.height
         guard width > 0, height > 0 else { return data }
 
+        let cropped: CGImage
         let currentAspect = Double(width) / Double(height)
-        guard abs(currentAspect - targetAspect) / targetAspect > 0.015 else {
-            return data
-        }
-
-        let rect: CGRect
-        if currentAspect > targetAspect {
-            let cropWidth = min(width, max(1, Int((Double(height) * targetAspect).rounded(.down))))
-            rect = CGRect(
-                x: CGFloat((width - cropWidth) / 2),
-                y: 0,
-                width: CGFloat(cropWidth),
-                height: CGFloat(height)
-            )
+        if abs(currentAspect - targetAspect) / targetAspect > 0.015 {
+            let rect: CGRect
+            if currentAspect > targetAspect {
+                let cropWidth = min(width, max(1, Int((Double(height) * targetAspect).rounded(.down))))
+                rect = CGRect(
+                    x: CGFloat((width - cropWidth) / 2),
+                    y: 0,
+                    width: CGFloat(cropWidth),
+                    height: CGFloat(height)
+                )
+            } else {
+                let cropHeight = min(height, max(1, Int((Double(width) / targetAspect).rounded(.down))))
+                rect = CGRect(
+                    x: 0,
+                    y: CGFloat((height - cropHeight) / 2),
+                    width: CGFloat(width),
+                    height: CGFloat(cropHeight)
+                )
+            }
+            cropped = image.cropping(to: rect) ?? image
         } else {
-            let cropHeight = min(height, max(1, Int((Double(width) / targetAspect).rounded(.down))))
-            rect = CGRect(
-                x: 0,
-                y: CGFloat((height - cropHeight) / 2),
-                width: CGFloat(width),
-                height: CGFloat(cropHeight)
-            )
+            cropped = image
         }
 
-        guard let cropped = image.cropping(to: rect),
-              let png = encodePNG(cropped) else {
+        let output = resized(cropped, to: size) ?? cropped
+        guard let png = encodePNG(output) else {
             return data
         }
         return png
@@ -66,6 +68,33 @@ enum ImageOutputNormalizer {
             return nil
         }
         return width / height
+    }
+
+    private static func resized(_ image: CGImage, to size: Size) -> CGImage? {
+        guard !size.isAuto,
+              size.width > 0,
+              size.height > 0,
+              (image.width != size.width || image.height != size.height) else {
+            return nil
+        }
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let context = CGContext(
+            data: nil,
+            width: size.width,
+            height: size.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else {
+            return nil
+        }
+
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+        return context.makeImage()
     }
 
     private static func encodePNG(_ image: CGImage) -> Data? {
