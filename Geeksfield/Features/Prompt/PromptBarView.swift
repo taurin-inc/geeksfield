@@ -558,7 +558,7 @@ private enum OutputResolution: CaseIterable, Hashable {
         switch self {
         case .auto: return nil
         case .twoK: return 2048
-        case .fourK: return 4096
+        case .fourK: return 3840
         }
     }
 
