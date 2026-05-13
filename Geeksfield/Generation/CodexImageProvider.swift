@@ -37,13 +37,14 @@ struct CodexImageProvider: ImageProvider {
     func generate(request: GenerationRequest, referenceImages: [Data], apiKey: String) async throws -> [Data] {
         _ = apiKey
         let count = max(1, request.batchSize)
+        let outputSize = request.size
+        let toolSize = ImageGenerationSizePolicy.apiToolSize(forFinalSize: outputSize)
         let prompt = Self.promptWithOutputOptions(
             request.prompt,
-            size: request.size,
+            size: toolSize ?? .auto,
             aspectRatio: request.aspectRatio
         )
         let modelID = request.model.id
-        let size = request.size
         let aspectRatio = request.aspectRatio
 
         return try await withThrowingTaskGroup(of: (Int, Data).self) { group in
@@ -53,9 +54,13 @@ struct CodexImageProvider: ImageProvider {
                         prompt: prompt,
                         images: referenceImages,
                         modelID: modelID,
-                        size: size
+                        size: toolSize
                     )
-                    let normalized = ImageOutputNormalizer.normalizedPNG(image, size: size, aspectRatio: aspectRatio)
+                    let normalized = ImageOutputNormalizer.normalizedPNG(
+                        image,
+                        size: outputSize,
+                        aspectRatio: aspectRatio
+                    )
                     return (index, normalized)
                 }
             }
