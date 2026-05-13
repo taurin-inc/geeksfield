@@ -530,6 +530,10 @@ struct PromptBarView: View {
 }
 
 private enum OutputResolution: CaseIterable, Hashable {
+    private static let imageGenerationMaxPixels = 8_294_400
+    private static let imageGenerationMaxEdge = 3_840
+    private static let imageGenerationSizeStep = 16
+
     case auto
     case twoK
     case fourK
@@ -544,14 +548,8 @@ private enum OutputResolution: CaseIterable, Hashable {
 
     func size(aspectRatio: String?) -> Size {
         guard let longEdge else { return .auto }
-        guard let ratio = aspectRatio.flatMap(Self.parseAspectRatio) else {
-            return Size(width: longEdge, height: longEdge)
-        }
-
-        if ratio >= 1 {
-            return Size(width: longEdge, height: max(1, Int((Double(longEdge) / ratio).rounded())))
-        }
-        return Size(width: max(1, Int((Double(longEdge) * ratio).rounded())), height: longEdge)
+        let ratio = aspectRatio.flatMap(Self.parseAspectRatio) ?? 1
+        return Self.constrainedSize(longEdge: longEdge, aspectRatio: ratio)
     }
 
     private var longEdge: Int? {
@@ -560,6 +558,45 @@ private enum OutputResolution: CaseIterable, Hashable {
         case .twoK: return 2048
         case .fourK: return 3840
         }
+    }
+
+    private static func constrainedSize(longEdge: Int, aspectRatio ratio: Double) -> Size {
+        let edge = Double(min(longEdge, imageGenerationMaxEdge))
+        let maxPixels = Double(imageGenerationMaxPixels)
+        let width: Double
+        let height: Double
+
+        if ratio >= 1 {
+            let unconstrainedWidth = edge
+            let unconstrainedHeight = edge / ratio
+            if unconstrainedWidth * unconstrainedHeight > maxPixels {
+                width = sqrt(maxPixels * ratio)
+                height = width / ratio
+            } else {
+                width = unconstrainedWidth
+                height = unconstrainedHeight
+            }
+        } else {
+            let unconstrainedHeight = edge
+            let unconstrainedWidth = edge * ratio
+            if unconstrainedWidth * unconstrainedHeight > maxPixels {
+                height = sqrt(maxPixels / ratio)
+                width = height * ratio
+            } else {
+                width = unconstrainedWidth
+                height = unconstrainedHeight
+            }
+        }
+
+        return Size(
+            width: steppedDimension(width),
+            height: steppedDimension(height)
+        )
+    }
+
+    private static func steppedDimension(_ value: Double) -> Int {
+        let stepped = Int(value.rounded(.down)) / imageGenerationSizeStep * imageGenerationSizeStep
+        return max(imageGenerationSizeStep, stepped)
     }
 
     private static func parseAspectRatio(_ raw: String) -> Double? {
